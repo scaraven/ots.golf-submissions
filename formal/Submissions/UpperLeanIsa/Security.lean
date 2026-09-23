@@ -27,14 +27,17 @@ open scoped Classical
 
 namespace OptimalOTS.LeanIsaBaseline
 
-attribute [local irreducible] hashBits blockBits msgBits securityBits maxSignatureBits
+set_option backward.isDefEq.respectTransparency false
+set_option backward.isDefEq.respectTransparency.types false
+-- The linter `whnf`s the types of binders; a membership in a concrete finset of records would be
+-- evaluated.
+set_option linter.constructorNameAsVariable false
+
+attribute [local irreducible] blockBits securityBits maxSignatureBits
 attribute [local irreducible] keygenBudget signBudget verifyBudget
-attribute [local irreducible] CostAtMost OracleAlgorithm.experiment rest rest₂ stB
-attribute [local irreducible] keygen sign verify
+attribute [local irreducible] publicFiber finiteFiber hiddenCache queryLocation Record.query
 
 local instance instDecEqRecordSecurity : DecidableEq Record := Classical.decEq Record
-
-local instance instDecEqPublicDataSecurity : DecidableEq PublicData := Classical.decEq PublicData
 
 variable (A : OracleAlgorithm.Adversary)
 
@@ -53,15 +56,12 @@ theorem mem_support_run_keygen (ξ : Record) :
       exact hp
     exact le_of_eq (ind_not hne)
   rw [E_run_keygen] at h0
-  have hle : w * ind (((ξ.publicKey, ξ.1), ξ.cache) = ((ξ.publicKey, ξ.1), ξ.cache)) ≤
-      ∑ ζ : Record, w * ind (((ζ.publicKey, ζ.1), ζ.cache) = ((ξ.publicKey, ξ.1), ξ.cache)) :=
-    Finset.single_le_sum (f := fun ζ : Record =>
-      w * ind (((ζ.publicKey, ζ.1), ζ.cache) = ((ξ.publicKey, ξ.1), ξ.cache)))
-      (fun _ _ => zero_le) (Finset.mem_univ ξ)
+  have hall := Iff.mp (Finset.sum_eq_zero_iff_of_nonneg (fun _ _ => zero_le)) h0
+  have h2 := hall ξ (Finset.mem_univ _)
   have h1 : ind (((ξ.publicKey, ξ.1), ξ.cache) = ((ξ.publicKey, ξ.1), ξ.cache)) = 1 :=
     ind_of rfl
-  rw [h0, h1, mul_one] at hle
-  exact w_ne_zero_stg (le_antisymm hle zero_le)
+  simp only [h1, mul_one] at h2
+  exact w_ne_zero_stg h2
 
 /-- The budget of the experiment is a budget of the continuation after key generation, at every
 record. -/
@@ -95,6 +95,8 @@ theorem E_run_experiment (g' : Bool × Cache → ℝ≥0∞) :
 
 /-! ## Regrouping by public data before signing -/
 
+attribute [local irreducible] fiber₀
+
 theorem mem_fiber₀_sec (v : PublicData) (ξ : Record) :
     ξ ∈ fiber₀ v ↔ publicData beforeSigning ξ = v := by
   unfold fiber₀
@@ -103,33 +105,47 @@ theorem mem_fiber₀_sec (v : PublicData) (ξ : Record) :
 theorem fiber₀_eq_filter_sec (v : PublicData) :
     (Finset.univ.filter fun ξ : Record => publicData beforeSigning ξ = v) = fiber₀ v := by
   ext ξ
-  rw [Finset.mem_filter, mem_fiber₀_sec]
-  exact ⟨fun h => h.2, fun h => ⟨Finset.mem_univ ξ, h⟩⟩
+  rw [mem_fiber₀_sec]
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+
+/-- The public data before signing of all records. Kept opaque: a membership in it would
+otherwise be evaluated by `whnf`. -/
+def dataSet₀ : Finset PublicData := Finset.univ.image (publicData beforeSigning)
+
+theorem mem_dataSet₀ (ξ : Record) : publicData beforeSigning ξ ∈ dataSet₀ := by
+  unfold dataSet₀
+  exact Finset.mem_image_of_mem _ (Finset.mem_univ _)
+
+theorem exists_of_mem_dataSet₀ {v : PublicData} (hv : v ∈ dataSet₀) :
+    ∃ ξ, publicData beforeSigning ξ = v := by
+  unfold dataSet₀ at hv
+  obtain ⟨ξ, -, hξ⟩ := Finset.mem_image.1 hv
+  exact ⟨ξ, hξ⟩
+
+attribute [local irreducible] dataSet₀
+
+theorem nonempty_record_sec : Nonempty Record := ⟨((fun _ => 0), (fun _ => 0))⟩
 
 /-- A representative of the records with public data `v` (any record if there is none). -/
 def rep (v : PublicData) : Record :=
-  @dite Record (∃ ξ, ξ ∈ fiber₀ v) (Classical.propDecidable _)
-    (fun h => Classical.choose h) (fun _ => ((fun _ => 0), (fun _ => 0)))
+  @Classical.epsilon Record nonempty_record_sec (fun ξ => ξ ∈ fiber₀ v)
 
-theorem rep_mem {v : PublicData} (hv : v ∈ Finset.univ.image (publicData beforeSigning)) :
-    rep v ∈ fiber₀ v := by
-  have hex : ∃ ξ, ξ ∈ fiber₀ v := by
-    obtain ⟨ξ, -, hξ⟩ := Finset.mem_image.1 hv
-    exact ⟨ξ, (mem_fiber₀_sec v ξ).2 hξ⟩
+theorem rep_mem {v : PublicData} (hv : v ∈ dataSet₀) : rep v ∈ fiber₀ v := by
+  obtain ⟨ξ, hξ⟩ := exists_of_mem_dataSet₀ hv
+  have hex : ∃ ζ, ζ ∈ fiber₀ v := ⟨ξ, (mem_fiber₀_sec v ξ).2 hξ⟩
   unfold rep
-  rw [dif_pos hex]
-  exact Classical.choose_spec hex
+  exact Classical.epsilon_spec hex
 
 theorem regroup (G : Record → (Message × A.State) × Cache → ℝ≥0∞) :
     ∑ ξ : Record, w * E (run (A.choose ξ.publicKey) (exposedCache beforeSigning ξ)) (G ξ) =
-      ∑ v ∈ Finset.univ.image (publicData beforeSigning),
+      ∑ v ∈ dataSet₀,
         E (run (A.choose (rep v).publicKey) (exposedCache beforeSigning (rep v)))
           (fun p => ∑ ξ ∈ fiber₀ v, w * G ξ p) := by
   symm
-  calc ∑ v ∈ Finset.univ.image (publicData beforeSigning),
+  calc ∑ v ∈ dataSet₀,
         E (run (A.choose (rep v).publicKey) (exposedCache beforeSigning (rep v)))
           (fun p => ∑ ξ ∈ fiber₀ v, w * G ξ p)
-      = ∑ v ∈ Finset.univ.image (publicData beforeSigning), ∑ ξ ∈ fiber₀ v,
+      = ∑ v ∈ dataSet₀, ∑ ξ ∈ fiber₀ v,
           w * E (run (A.choose ξ.publicKey) (exposedCache beforeSigning ξ)) (G ξ) := by
         refine Finset.sum_congr rfl fun v hv => ?_
         rw [E_weighted_sum]
@@ -138,31 +154,31 @@ theorem regroup (G : Record → (Message × A.State) × Cache → ℝ≥0∞) :
           ((mem_fiber₀_sec v ξ).1 hξ).trans ((mem_fiber₀_sec v (rep v)).1 (rep_mem hv)).symm
         rw [publicKey_data_eq beforeSigning ξ (rep v) hd,
           exposedCache_data_eq beforeSigning ξ (rep v) hd]
-    _ = ∑ v ∈ Finset.univ.image (publicData beforeSigning),
+    _ = ∑ v ∈ dataSet₀,
           ∑ ξ ∈ Finset.univ.filter (fun ξ : Record => publicData beforeSigning ξ = v),
             w * E (run (A.choose ξ.publicKey) (exposedCache beforeSigning ξ)) (G ξ) := by
         refine Finset.sum_congr rfl fun v _ => ?_
         rw [fiber₀_eq_filter_sec]
     _ = ∑ ξ : Record, w * E (run (A.choose ξ.publicKey) (exposedCache beforeSigning ξ)) (G ξ) :=
-        Finset.sum_fiberwise_of_maps_to (s := Finset.univ)
-          (t := Finset.univ.image (publicData beforeSigning)) (g := publicData beforeSigning)
-          (fun ξ _ => Finset.mem_image_of_mem _ (Finset.mem_univ ξ)) _
+        Finset.sum_fiberwise_of_maps_to (s := Finset.univ) (t := dataSet₀)
+          (g := publicData beforeSigning) (fun ξ _ => mem_dataSet₀ ξ) _
 
-theorem sum_sumW_fiber₀ :
-    ∑ v ∈ Finset.univ.image (publicData beforeSigning), sumW (fiber₀ v) = 1 := by
-  calc ∑ v ∈ Finset.univ.image (publicData beforeSigning), sumW (fiber₀ v)
-      = ∑ v ∈ Finset.univ.image (publicData beforeSigning),
+theorem sum_sumW_fiber₀ : ∑ v ∈ dataSet₀, sumW (fiber₀ v) = 1 := by
+  calc ∑ v ∈ dataSet₀, sumW (fiber₀ v)
+      = ∑ v ∈ dataSet₀,
           ∑ _ξ ∈ Finset.univ.filter (fun ξ : Record => publicData beforeSigning ξ = v), w := by
         refine Finset.sum_congr rfl fun v _ => ?_
         unfold sumW
         rw [fiber₀_eq_filter_sec]
     _ = ∑ _ξ : Record, w :=
-        Finset.sum_fiberwise_of_maps_to (s := Finset.univ)
-          (t := Finset.univ.image (publicData beforeSigning)) (g := publicData beforeSigning)
-          (fun ξ _ => Finset.mem_image_of_mem _ (Finset.mem_univ ξ)) _
+        Finset.sum_fiberwise_of_maps_to (s := Finset.univ) (t := dataSet₀)
+          (g := publicData beforeSigning) (fun ξ _ => mem_dataSet₀ ξ) _
     _ = 1 := sum_w
 
 /-! ## The bound -/
+
+attribute [local irreducible] CostAtMost OracleAlgorithm.experiment rest rest₂ stB
+attribute [local irreducible] keygen sign verify
 
 theorem main_bound {B : ℕ} (hB : CostAtMost (OracleAlgorithm.experiment scheme A) B) :
     probTrue (OracleAlgorithm.experiment scheme A) ≤ κ * B := by
@@ -179,7 +195,7 @@ theorem main_bound {B : ℕ} (hB : CostAtMost (OracleAlgorithm.experiment scheme
             E (run (rest₂ A ξ.publicKey ξ.1 p.1)
               (Cache.extend p.2 (hiddenCache beforeSigning ξ))) g) :=
         Finset.sum_le_sum fun ξ _ => mul_le_mul' le_rfl (stageA_iub A ξ)
-    _ = ∑ v ∈ Finset.univ.image (publicData beforeSigning),
+    _ = ∑ v ∈ dataSet₀,
           E (run (A.choose (rep v).publicKey) (exposedCache beforeSigning (rep v)))
             (fun p => ∑ ξ ∈ fiber₀ v, w *
               (if Cache.Hits p.2 (hiddenCache beforeSigning ξ) then 1 else
@@ -188,10 +204,10 @@ theorem main_bound {B : ℕ} (hB : CostAtMost (OracleAlgorithm.experiment scheme
         regroup A (fun ξ p => if Cache.Hits p.2 (hiddenCache beforeSigning ξ) then 1 else
           E (run (rest₂ A ξ.publicKey ξ.1 p.1)
             (Cache.extend p.2 (hiddenCache beforeSigning ξ))) g)
-    _ = ∑ v ∈ Finset.univ.image (publicData beforeSigning),
+    _ = ∑ v ∈ dataSet₀,
           E (run (A.choose (rep v).publicKey) (exposedCache beforeSigning (rep v)))
             (fun p => FA A v p.1 p.2) := rfl
-    _ ≤ ∑ v ∈ Finset.univ.image (publicData beforeSigning), κ * sumW (fiber₀ v) * B :=
+    _ ≤ ∑ v ∈ dataSet₀, κ * sumW (fiber₀ v) * B :=
         Finset.sum_le_sum fun v hv =>
           stageA_master A v (rep v) (rep_mem hv) B (fun ξ _ => hrest ξ)
     _ = κ * B := by
