@@ -22,3 +22,5 @@ import Submissions.UpperLeanIsa.RootBinding
 import Submissions.UpperLeanIsa.SecondPreimages
 import Submissions.UpperLeanIsa.TargetBound
 import Submissions.UpperLeanIsa.Wire
+import Submissions.UpperLeanIsa.Stages
+import Submissions.UpperLeanIsa.Budget
