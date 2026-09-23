@@ -541,8 +541,11 @@ private theorem E_run_tabulate_chains (sk : Words) :
           G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩) p'.1 :
             Fin (n + 1) → Word), p'.2)) := by
       intro y t k u
-      rw [hG y t.succ k u, word_update sk y _ u (φ 0) ⟨0 + 255, by omega⟩
-        (fun _ hb => (h0 t (congrArg Prod.fst (Sum.inl.inj hb))).elim)]
+      have hw := word_update sk y (.inl (φ t.succ, k)) u (φ 0) ⟨0 + 255, by omega⟩
+        (fun _ hb => (h0 t (congrArg Prod.fst (Sum.inl.inj hb))).elim)
+      exact congrArg₂ (fun (G₀ : (Fin (n + 1) → Word) × Cache → ℝ≥0∞) (z : Word)
+          (p' : (Fin n → Word) × Cache) => G₀ ((Fin.cases z p'.1 : Fin (n + 1) → Word), p'.2))
+        (hG y t.succ k u) hw
     calc ∑ y : Tbl, Nt * E (run (tabulate fun t : Fin (n + 1) =>
             chain (φ t).val 0 255 (sk (φ t))) (c y)) (G y)
         = ∑ y : Tbl, Nt * E (run (chain (φ 0).val 0 255 (sk (φ 0))) (c y)) (fun p =>
