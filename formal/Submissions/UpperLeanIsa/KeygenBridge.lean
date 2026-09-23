@@ -115,7 +115,11 @@ private theorem avg_hash (a : HashLocation) (x : Tbl → BitVec 896) (c : Tbl �
       ∑ y : Tbl, Nt * K y (y a, (c y).cacheQuery ⟨896, x y⟩ (y a)) := by
   have key := sum_avg_update (R := fun _ : HashLocation => BitVec hashBits) a
     (fun u y => K y (u, (c y).cacheQuery ⟨896, x y⟩ u))
-    (fun u u' y => by simp only [hx, hc, hK])
+    (fun u u' y => by
+      first
+        | (simp only [hx, hc, hK]; done)
+        | (simp only [hc, hK]; rw [hx y u'])
+        | (rw [hK, hc, hx y u']))
   refine Eq.trans ?_ key
   have h1 : ∀ y : Tbl, E (run (hash (x y)) (c y)) (K y) =
       ∑ u : BitVec hashBits, (Fintype.card (BitVec hashBits) : ℝ≥0∞)⁻¹ *
@@ -531,13 +535,13 @@ private theorem E_run_tabulate_chains (sk : Words) :
     have hG' : ∀ y (t : Fin n) (k : Fin 255) u,
         (fun p' : (Fin n → Word) × Cache =>
           G (Function.update y (.inl (φ t.succ, k)) u)
-            ((Fin.cases (Record.endpoint (sk, Function.update y (.inl (φ t.succ, k)) u) (φ 0))
-              p'.1 : Fin (n + 1) → Word), p'.2)) =
+            ((Fin.cases (Record.word (sk, Function.update y (.inl (φ t.succ, k)) u) (φ 0)
+              ⟨0 + 255, by omega⟩) p'.1 : Fin (n + 1) → Word), p'.2)) =
         (fun p' : (Fin n → Word) × Cache =>
-          G y ((Fin.cases (Record.endpoint (sk, y) (φ 0)) p'.1 : Fin (n + 1) → Word),
-            p'.2)) := by
+          G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩) p'.1 :
+            Fin (n + 1) → Word), p'.2)) := by
       intro y t k u
-      rw [hG y t.succ k u, endpoint_update sk y _ u (φ 0)
+      rw [hG y t.succ k u, word_update sk y _ u (φ 0) ⟨0 + 255, by omega⟩
         (fun _ hb => (h0 t (congrArg Prod.fst (Sum.inl.inj hb))).elim)]
     calc ∑ y : Tbl, Nt * E (run (tabulate fun t : Fin (n + 1) =>
             chain (φ t).val 0 255 (sk (φ t))) (c y)) (G y)
@@ -548,28 +552,41 @@ private theorem E_run_tabulate_chains (sk : Words) :
       _ = ∑ y : Tbl, Nt * E (run (tabulate fun t : Fin n =>
               chain (φ t.succ).val 0 255 (sk (φ t.succ)))
             (progUpd (sk, y) (ChainSeg (φ 0) 0 255) (c y)))
-            (fun p' => G y ((Fin.cases (Record.endpoint (sk, y) (φ 0)) p'.1 :
+            (fun p' => G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩) p'.1 :
               Fin (n + 1) → Word), p'.2)) :=
           E_run_chain_avg sk (φ 0) (fun y (p : Word × Cache) =>
               E (run (tabulate fun t : Fin n => chain (φ t.succ).val 0 255 (sk (φ t.succ))) p.2)
                 (fun p' => G y ((Fin.cases p.1 p'.1 : Fin (n + 1) → Word), p'.2)))
             255 0 (by omega) (fun _ => sk (φ 0)) c (fun y => (word_zero sk y (φ 0)).symm)
             (fun y => hfr y 0) (fun y k u _ => hc y 0 k u) hG₁
-      _ = ∑ y : Tbl, Nt * G y ((Fin.cases (Record.endpoint (sk, y) (φ 0))
+      _ = ∑ y : Tbl, Nt * G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩)
               (fun t => Record.endpoint (sk, y) (φ t.succ)) : Fin (n + 1) → Word),
             progUpd (sk, y) (ChainsOf fun t => φ t.succ)
               (progUpd (sk, y) (ChainSeg (φ 0) 0 255) (c y))) :=
           ih (fun t => φ t.succ) hφ' (fun y => progUpd (sk, y) (ChainSeg (φ 0) 0 255) (c y))
-            (fun y p' => G y ((Fin.cases (Record.endpoint (sk, y) (φ 0)) p'.1 :
+            (fun y p' => G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩) p'.1 :
               Fin (n + 1) → Word), p'.2)) hfr' hc' hG'
       _ = ∑ y : Tbl, Nt * G y (fun t => Record.endpoint (sk, y) (φ t),
             progUpd (sk, y) (ChainsOf φ) (c y)) := by
           refine Finset.sum_congr rfl fun y _ => ?_
-          have hcases : (Fin.cases (Record.endpoint (sk, y) (φ 0))
+          have hf : (⟨0 + 255, by omega⟩ : Fin 256) = 255 := by
+            first
+              | rfl
+              | decide
+              | (apply Fin.ext; simp)
+          have hw255 : Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩ =
+              Record.endpoint (sk, y) (φ 0) := by
+            rw [hf]
+            rfl
+          have hcases : (Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩)
               (fun t => Record.endpoint (sk, y) (φ t.succ)) : Fin (n + 1) → Word) =
               fun t => Record.endpoint (sk, y) (φ t) := by
             funext t
-            rcases Fin.eq_zero_or_eq_succ t with rfl | ⟨t, rfl⟩ <;> rfl
+            rcases Fin.eq_zero_or_eq_succ t with rfl | ⟨t, rfl⟩
+            · first
+                | exact hw255
+                | exact Eq.trans Fin.cases_zero hw255
+            · rfl
           rw [hcases, progUpd_progUpd, progUpd_congr (chainsOf_succ φ)]
 
 /-! ## The root -/
