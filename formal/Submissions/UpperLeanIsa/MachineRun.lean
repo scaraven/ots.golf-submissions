@@ -538,22 +538,31 @@ theorem initial_eq : (Regs.initial : Regs K) = ⟨gpow 0, 1⟩ :=
 theorem next_gpow (k : ℕ) : Regs.next (⟨gpow k, 1⟩ : Regs K) = ⟨gpow (k + 1), 1⟩ :=
   congrArg (fun x : K => (⟨x, 1⟩ : Regs K)) (g_mul_gpow k)
 
-theorem runCost_succ_eq (L : MemImage κ) (m k : ℕ) (hk : k < N) :
-    LeanIsa.runCost program L (m + 1) ⟨gpow k, 1⟩ =
-      (LeanIsa.execute L ⟨gpow k, 1⟩ (cinstrAt k).toInstr >>= fun x =>
+/-- One step of the loop, for an arbitrary program and registers: nothing concrete is ever
+unfolded, so the kernel check of the instance below stays small. -/
+theorem runCost_succ_of (prog : Program) (L : MemImage κ) (m : ℕ) (r : Regs K) (ins : Instr)
+    (hne : r.pc ≠ prog.finalPc) (hf : prog.fetch r.pc = some ins) :
+    LeanIsa.runCost prog L (m + 1) r =
+      (LeanIsa.execute L r ins >>= fun x =>
         x.elim (pure none) fun next =>
-          Option.map (LeanIsa.weight (cinstrAt k).toInstr.opcode + ·) <$>
-            LeanIsa.runCost program L m next) := by
-  have hne := gpow_ne_finalPc hk
-  have hf := fetch_eq k hk
+          Option.map (LeanIsa.weight ins.opcode + ·) <$> LeanIsa.runCost prog L m next) := by
   first
     | rw [LeanIsa.runCost.eq_2, if_neg hne, hf]
     | rw [LeanIsa.runCost, if_neg hne, hf]
   -- Both sides bind the same `execute`; the continuations agree case by case (no comparison of
   -- two stuck matchers is ever needed).
   refine congrArg (fun F : Option (Regs K) → OracleComp Spec (Option ℕ) =>
-    LeanIsa.execute L ⟨gpow k, 1⟩ (cinstrAt k).toInstr >>= F) (funext fun x => ?_)
+    LeanIsa.execute L r ins >>= F) (funext fun x => ?_)
   cases x <;> rfl
+
+theorem runCost_succ_eq (L : MemImage κ) (m k : ℕ) (hk : k < N) :
+    LeanIsa.runCost program L (m + 1) ⟨gpow k, 1⟩ =
+      (LeanIsa.execute L ⟨gpow k, 1⟩ (cinstrAt k).toInstr >>= fun x =>
+        x.elim (pure none) fun next =>
+          Option.map (LeanIsa.weight (cinstrAt k).toInstr.opcode + ·) <$>
+            LeanIsa.runCost program L m next) :=
+  runCost_succ_of program L m ⟨gpow k, 1⟩ (cinstrAt k).toInstr (gpow_ne_finalPc hk)
+    (fetch_eq k hk)
 
 theorem runCost_zero_of_lt (L : MemImage κ) (k : ℕ) (hk : k < N) :
     LeanIsa.runCost program L 0 ⟨gpow k, 1⟩ = pure none := by
