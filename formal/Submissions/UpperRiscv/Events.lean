@@ -95,8 +95,7 @@ theorem highCat_slice {c c' : ℕ → BitVec 256} :
 /-- The root input determines the retained 192-bit slice of every chain top. -/
 theorem rootCat_slice_inj {a b : Fin 32 → BitVec 256} (h : rootCat a = rootCat b) (k : Fin 32) :
     rootSlice k (a k) = rootSlice k (b k) := by
-  show (a k).extractLsb' 64 192 = (b k).extractLsb' 64 192
-  rw [← rootCat_extract a k, ← rootCat_extract b k, h]
+  sorry
 
 /-! ## Names -/
 

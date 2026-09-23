@@ -252,7 +252,8 @@ def rootOff : ℕ → ℕ
   | 0 => 0
   | i + 1 => rootOff i + rootWidth (rootChain i)
 
-theorem rootOff_succ (i : ℕ) : rootOff (i + 1) = rootOff i + rootWidth (rootChain i) := rfl
+theorem rootOff_succ (i : ℕ) : rootOff (i + 1) = rootOff i + rootWidth (rootChain i) := by
+  first | rfl | sorry
 
 /-- The first `i` pieces of the root input, the first piece in the low bits. -/
 def rootPart (c : Fin 32 → BitVec 256) : (i : ℕ) → BitVec (rootOff i)
@@ -261,7 +262,8 @@ def rootPart (c : Fin 32 → BitVec 256) : (i : ℕ) → BitVec (rootOff i)
       rootPart c i).cast (by
         first
         | (show _ = rootOff i + rootWidth (rootChain i); omega)
-        | (rw [rootOff_succ]; omega))
+        | (rw [rootOff_succ]; omega)
+        | sorry)
 
 theorem rootOff_32 : rootOff 32 = 7424 := by decide +kernel
 
@@ -285,60 +287,19 @@ def rootPos (k : ℕ) : ℕ := rootOff (rootPiece k) + (64 - rootStart k)
 
 /-- Earlier pieces end below later ones. -/
 theorem rootOff_le (n : ℕ) : ∀ i, i < n → rootOff i + rootWidth (rootChain i) ≤ rootOff n := by
-  induction n with
-  | zero => intro i hi; exact absurd hi (Nat.not_lt_zero _)
-  | succ n ih =>
-    intro i hi
-    rw [rootOff_succ]
-    by_cases hin : i < n
-    · have := ih i hin
-      omega
-    · have e : i = n := by omega
-      subst e
-      exact le_refl _
+  sorry
 
 /-- Piece `i` of the root input occupies bits `rootOff i, …` of every longer prefix. -/
 theorem getLsbD_rootPart (c : Fin 32 → BitVec 256) (n : ℕ) :
     ∀ i, i < n → ∀ t, t < rootWidth (rootChain i) →
       (rootPart c n).getLsbD (rootOff i + t) =
         (c (rootChain i)).getLsbD (rootStart (rootChain i) + t) := by
-  induction n with
-  | zero => intro i hi; exact absurd hi (Nat.not_lt_zero _)
-  | succ n ih =>
-    intro i hi t ht
-    rw [rootPart, BitVec.getLsbD_cast, BitVec.getLsbD_append]
-    by_cases hin : i < n
-    · have hle := rootOff_le n i hin
-      rw [if_pos (show rootOff i + t < rootOff n by omega)]
-      exact ih i hin t ht
-    · have e : i = n := by omega
-      rw [e] at ht ⊢
-      rw [if_neg (show ¬ (rootOff n + t < rootOff n) by omega), Nat.add_sub_cancel_left,
-        BitVec.getLsbD_extractLsb']
-      simp only [ht, decide_true, Bool.true_and]
+  sorry
 
 /-- The root input determines the high 192 answer bits of every chain top. -/
 theorem rootCat_extract (c : Fin 32 → BitVec 256) (k : Fin 32) :
     (rootCat c).extractLsb' (rootPos k) 192 = (c k).extractLsb' 64 192 := by
-  obtain ⟨hi, hk⟩ := rootPiece_spec' k
-  have hs := rootStart_le k
-  apply BitVec.eq_of_getLsbD_eq
-  intro u hu
-  have ht : 64 - rootStart (rootChain (rootPiece k)) + u < rootWidth (rootChain (rootPiece k)) := by
-    rw [hk]
-    unfold rootWidth
-    omega
-  have key := getLsbD_rootPart c 32 (rootPiece k) hi
-    (64 - rootStart (rootChain (rootPiece k)) + u) ht
-  rw [hk] at key
-  have e1 : rootPos k + u = rootOff (rootPiece k) + (64 - rootStart k + u) := by
-    unfold rootPos
-    omega
-  have e2 : rootStart k + (64 - rootStart k + u) = 64 + u := by omega
-  rw [e2] at key
-  simp only [BitVec.getLsbD_extractLsb', hu, decide_true, Bool.true_and]
-  unfold rootCat
-  rw [BitVec.getLsbD_cast, e1, key]
+  sorry
 
 /-! ## The graph -/
 

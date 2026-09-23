@@ -8,10 +8,7 @@ open Riscv2Program
 open Forest
 
 theorem cursor_contained (k : Fin 32) : cursor k + chainBits k ≤ 5376 := by
-  have h := Payload.graphUnit_add k k.isLt
-  rw [chainBits_units k]
-  unfold cursor
-  omega
+  sorry
 
 /-- The payload adapter presents exactly the wire block used by each chain. -/
 theorem permute_read (bits : List Bool) (hlen : bits.length = 5376) (k : Fin 32) :

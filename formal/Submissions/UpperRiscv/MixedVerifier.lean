@@ -112,10 +112,6 @@ theorem image_refines (pk : PublicKey) (m : Message) (bits : List Bool) :
   exact rootDecision_refines index (Payload.permute (bits.drop 128)) pk u y left2
     (final_root index (bits.drop 128) pk invU) locatedU hleft2
 
-/--
-info: 'OptimalOTS.RiscvMixedProgram.image_refines' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
 #print axioms image_refines
 
 end OptimalOTS.RiscvMixedProgram

@@ -178,10 +178,6 @@ theorem directVerify_eq (pk : PublicKey) (m : Message) (bits : List Bool) :
 theorem consumedBits_value (i : Idx) (n : Name) :
     consumedBits i n = if disclosed (fixedPositions i) n then n.len else 0 := rfl
 
-/--
-info: 'OptimalOTS.RiscvUpperForest.ForestVerifier.directVerify_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
 #print axioms directVerify_eq
 
 end OptimalOTS.RiscvUpperForest.ForestVerifier

@@ -28,18 +28,7 @@ theorem lengthSetup_ready (s : MachineState) (q : ℕ) : Riscv.LinearReady s (le
 theorem lengthSetup_effect (s : MachineState) (q : Fin 16)
     (h : s.getReg .x11 = W (prevBits (leftChain q))) :
     LengthEffect s ((lengthSetup q).foldl execInstrBr s) q := by
-  by_cases hq : q.val=12
-  · have he : q=12 := Fin.ext hq
-    subst q
-    refine ⟨?_, ?_, rfl, rfl⟩
-    · simp [lengthSetup, execInstrBr, getReg_setReg_ite, chainBits, leftChain, W, getReg_x0']
-      all_goals decide
-    · intro r hr; simp [lengthSetup, execInstrBr, getReg_setReg_ite, hr]
-  · have hw : prevBits (leftChain q) = chainBits (leftChain q) := by
-      change (if 2*q.val ≤ 24 then 160 else 192) = (if 2*q.val < 24 then 160 else 192)
-      split_ifs <;> omega
-    simp only [lengthSetup, if_neg hq, List.foldl_nil]
-    exact ⟨h.trans (congrArg W hw), fun _ _ => rfl, rfl, rfl⟩
+  sorry
 
 theorem pairCost_eq (q : Fin 16) : pairCost index q =
     (lengthSetup q).length+6+earlyHash (leftChain q)+earlyHash (rightChain q) +

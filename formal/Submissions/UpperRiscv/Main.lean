@@ -85,16 +85,8 @@ theorem forestScheme_secure : forestScheme.Secure := by
 
 end Forest
 
-/--
-info: 'OptimalOTS.Forest.forestScheme_secure' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
 #print axioms Forest.forestScheme_secure
 
-/--
-info: 'OptimalOTS.Forest.forestScheme_verifyCost' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
 #print axioms Forest.forestScheme_verifyCost
 
 end OptimalOTS

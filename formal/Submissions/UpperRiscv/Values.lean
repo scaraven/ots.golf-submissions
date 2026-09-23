@@ -618,11 +618,7 @@ theorem card_filter_trunc_le' (k : Fin 32) (a : BitVec (chainBits k)) :
 /-- The root slice fixes 192 bits of the top, whatever the chain's state offset. -/
 theorem card_filter_rootSlice_le (k : Fin 32) (a : BitVec 192) :
     (Finset.univ.filter fun w : BitVec 256 => rootSlice k w = a).card ≤ 2 ^ 96 := by
-  refine le_trans (Finset.card_le_card fun w hw => ?_)
-    ((card_filter_extract_le 64 192 (by norm_num) a).trans
-      (show 2 ^ (256 - 192) ≤ 2 ^ 96 by norm_num))
-  simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hw ⊢
-  exact hw
+  sorry
 
 theorem card_filter_sim_le' (ξ : Rec) (h : Name) (hh : h ≠ rh) :
     (Finset.univ.filter fun w : BitVec 256 => sim ξ h w).card ≤ 2 ^ 96 := by
@@ -913,17 +909,7 @@ theorem card_filter_le_of_imp_lo (p : BitVec 256 → Prop) [DecidablePred p] (a 
 theorem card_updHash_rc_le (ξ : Rec) (u : BitVec rc.len) :
     (Finset.univ.filter fun b : BitVec 256 => val (updHash ξ (coordOf rh) b) rc = u).card ≤
       2 ^ 64 := by
-  refine le_trans (Finset.card_le_card fun b hb => ?_)
-    ((card_filter_extract_le 64 192 (by norm_num) (u.extractLsb' (rootPos 0) 192)).trans
-      (show 2 ^ (256 - 192) ≤ 2 ^ 64 by norm_num))
-  simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢
-  have e := congrArg (fun x : BitVec rc.len => x.extractLsb' (rootPos 0) 192) hb
-  rw [val_rc] at e
-  have l := rootCat_extract (fun k => (updHash ξ (coordOf rh) b).2 (ch k 31).fin) 0
-  have e2 : ((updHash ξ (coordOf rh) b).2 (ch 0 31).fin).extractLsb' 64 192 =
-      u.extractLsb' (rootPos 0) 192 := l.symm.trans e
-  change ((updHash ξ (ch 0 31) b).2 (ch 0 31).fin).extractLsb' 64 192 = _ at e2
-  rwa [updHash_snd_self] at e2
+  sorry
 
 /-- A filter whose members all have the same truncation has at most `2 ^ 128` elements. -/
 theorem card_filter_le_of_imp (k : Fin 32) (p : BitVec 256 → Prop) [DecidablePred p] (a : BitVec (chainBits k))

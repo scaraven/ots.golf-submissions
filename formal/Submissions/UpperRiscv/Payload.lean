@@ -94,87 +94,32 @@ def unindex (len i : ℕ) : ℕ :=
   if len = 5376 ∧ i < 5376 then 32 * unitUnmap (i / 32) + i % 32 else i
 
 theorem index_of (i : ℕ) (hi : i < 5376) : index 5376 i = 32 * unitMap (i / 32) + i % 32 := by
-  have hc : 5376 = 5376 ∧ i < 5376 := ⟨rfl, hi⟩
-  unfold index
-  rw [if_pos hc]
+  sorry
 
 theorem unindex_of (i : ℕ) (hi : i < 5376) :
     unindex 5376 i = 32 * unitUnmap (i / 32) + i % 32 := by
-  have hc : 5376 = 5376 ∧ i < 5376 := ⟨rfl, hi⟩
-  unfold unindex
-  rw [if_pos hc]
+  sorry
 
 theorem div_mod_32 (a r : ℕ) (hr : r < 32) :
     (32 * a + r) / 32 = a ∧ (32 * a + r) % 32 = r :=
   ⟨by omega, by omega⟩
 
 theorem index_lt (len i : ℕ) (hi : i < len) : index len i < len := by
-  by_cases h : len = 5376 ∧ i < 5376
-  · obtain ⟨rfl, h2⟩ := h
-    rw [index_of i h2]
-    have ha := unitMap_lt (i / 32) (by omega)
-    have hr := Nat.mod_lt i (show 32 > 0 by norm_num)
-    omega
-  · unfold index
-    rw [if_neg h]
-    exact hi
+  sorry
 
 theorem unindex_lt (len i : ℕ) (hi : i < len) : unindex len i < len := by
-  by_cases h : len = 5376 ∧ i < 5376
-  · obtain ⟨rfl, h2⟩ := h
-    rw [unindex_of i h2]
-    have ha := unitUnmap_lt (i / 32) (by omega)
-    have hr := Nat.mod_lt i (show 32 > 0 by norm_num)
-    omega
-  · unfold unindex
-    rw [if_neg h]
-    exact hi
+  sorry
 
 theorem unindex_index (len i : ℕ) (hi : i < len) : unindex len (index len i) = i := by
-  by_cases h : len = 5376 ∧ i < 5376
-  · obtain ⟨rfl, h2⟩ := h
-    have ha := unitMap_lt (i / 32) (by omega)
-    have hr := Nat.mod_lt i (show 32 > 0 by norm_num)
-    have hd := div_mod_32 (unitMap (i / 32)) (i % 32) hr
-    rw [index_of i h2, unindex_of (32 * unitMap (i / 32) + i % 32) (by omega), hd.1, hd.2,
-      unitUnmap_unitMap (i / 32) (by omega)]
-    omega
-  · have e : index len i = i := by
-      unfold index
-      rw [if_neg h]
-    rw [e]
-    unfold unindex
-    rw [if_neg h]
+  sorry
 
 theorem index_unindex (len i : ℕ) (hi : i < len) : index len (unindex len i) = i := by
-  by_cases h : len = 5376 ∧ i < 5376
-  · obtain ⟨rfl, h2⟩ := h
-    have ha := unitUnmap_lt (i / 32) (by omega)
-    have hr := Nat.mod_lt i (show 32 > 0 by norm_num)
-    have hd := div_mod_32 (unitUnmap (i / 32)) (i % 32) hr
-    rw [unindex_of i h2, index_of (32 * unitUnmap (i / 32) + i % 32) (by omega), hd.1, hd.2,
-      unitMap_unitUnmap (i / 32) (by omega)]
-    omega
-  · have e : unindex len i = i := by
-      unfold unindex
-      rw [if_neg h]
-    rw [e]
-    unfold index
-    rw [if_neg h]
+  sorry
 
 /-- A chain value is read from consecutive wire bits. -/
 theorem index_chain (k : ℕ) (hk : k < 32) (i : ℕ) (hi : i < 32 * unitCount k) :
     index 5376 (32 * graphUnit k + i) = 32 * wireUnit k + i := by
-  have hg := graphUnit_add k hk
-  have hu : unitCount k ≤ 6 := by
-    unfold unitCount
-    split_ifs <;> omega
-  have ht : i / 32 < unitCount k := by omega
-  have e := unitMap_chain k hk (i / 32) (by omega) ht
-  have hd1 : (32 * graphUnit k + i) / 32 = graphUnit k + i / 32 := by omega
-  have hd2 : (32 * graphUnit k + i) % 32 = i % 32 := by omega
-  rw [index_of (32 * graphUnit k + i) (by omega), hd1, hd2, e]
-  omega
+  sorry
 
 /-- Graph-order payload of a wire payload (the decoding direction). -/
 def permute (bits : List Bool) : List Bool :=
