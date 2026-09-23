@@ -32,3 +32,5 @@ import Submissions.UpperLeanIsa.Transcript
 import Submissions.UpperLeanIsa.Events
 import Submissions.UpperLeanIsa.StageB
 import Submissions.UpperLeanIsa.StageA
+import Submissions.UpperLeanIsa.KeygenBridge
+import Submissions.UpperLeanIsa.Security
