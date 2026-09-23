@@ -177,7 +177,9 @@ theorem hiddenCache_mono (m : Message) (ξ : Record) (q : Query)
 theorem publicKey_data_eq (d : Cut) (ξ ζ : Record) (h : publicData d ξ = publicData d ζ) :
     ξ.publicKey = ζ.publicKey := by
   have ha : ξ.2 (.inr 33) = ζ.2 (.inr 33) := exposed_answer_eq d ξ ζ h (.inr 33) (fun hh => hh)
-  simp only [Record.publicKey, ha]
+  unfold Record.publicKey
+  simp only [ha]
+  all_goals with_unfolding_all rfl
 
 /-- The public data before signing are part of the public data after signing. -/
 theorem publicData_before_of_after (m : Message) (ξ ζ : Record)
