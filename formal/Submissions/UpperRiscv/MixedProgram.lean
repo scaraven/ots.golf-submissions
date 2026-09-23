@@ -1,7 +1,11 @@
 import Submissions.UpperRiscv.Program
 
-/-! The 364-cycle mixed-width candidate image. This module proves image validity;
-the complete execution/refinement certificate is a separate obligation. -/
+/-! The 360-cycle mixed-width candidate image. This module proves image validity;
+the complete execution/refinement certificate is a separate obligation.
+
+Chains 7, 11, 15 and 19 are hashed in place: each wire value starts five bytes into its own cell,
+inside the chain's 32-byte answer buffer at byte 13, so the chain has no expansion hash and no
+redirect, and while it hashes `x10` points at its wire value (`work k = wireSlot k`). -/
 
 set_option maxRecDepth 100000
 
@@ -30,6 +34,11 @@ theorem wireSlot_eq_slot_of_not_narrow {k : ℕ} (hn : ¬ narrow k = true) : wir
 
 theorem wireSlot_ne_slot_of_narrow {k : ℕ} (hn : narrow k = true) : wireSlot k ≠ slot k := by
   unfold narrow at hn; simpa using hn
+/-- Chains whose first hash moves the wire value into the cell, followed by the redirect. A value
+at its cell (byte 8 of the answer buffer) or five bytes above it (byte 13) is hashed in place. -/
+def expands (k : ℕ) : Bool := decide (wireSlot k ≠ slot k ∧ wireSlot k ≠ slot k + 5)
+/-- The input address while the chain hashes. -/
+def work (k : ℕ) : ℕ := if expands k then slot k else wireSlot k
 def outAddr (k : ℕ) : ℕ := slot k - 8
 def fineWidth (_q : ℕ) : ℕ := 4
 def copies (_q : ℕ) : ℕ := 16
@@ -66,18 +75,18 @@ def indexPhase : Code :=
 def enter (k previous : ℕ) : Code :=
   [.ADDI .x10 .x10 (imm12 ((wireSlot k : ℤ) - previous)),
    .ADDI .x12 .x10 (imm12 ((outAddr k : ℤ) - wireSlot k))] ++
-    if narrow k then [.ECALL, .ADDI .x10 .x12 8] else []
+    if expands k then [.ECALL, .ADDI .x10 .x12 8] else []
 def prologue (q : ℕ) : Code :=
   (if q = 2 then [.ADDI .x11 .x0 152] else if q = 10 then [.ADDI .x11 .x0 192] else []) ++
-    enter (2*q) (if q = 0 then hashBase else slot (2*q-1)) ++
+    enter (2*q) (if q = 0 then hashBase else work (2*q-1)) ++
     [.LHU .x28 .x12 (imm12 ((laneBase + 2*q : ℤ) - outAddr (2*q))),
      .JALR .x0 .x28 (imm12 (jumpImm q))]
 def root : Code :=
   [.ADDI .x10 .x10 (imm12 ((0x3FFFD8 : ℤ) - slot 31)), .ADDI .x11 .x13 640, .ECALL]
 def copyBody (q d : ℕ) : Code :=
-  List.replicate (2 ^ fineWidth q - if narrow (2*q) then 1 else 0) .ECALL ++
-    enter (2*q+1) (slot (2*q)) ++
-    List.replicate (d+1 - if narrow (2*q+1) then 1 else 0) .ECALL ++
+  List.replicate (2 ^ fineWidth q - if expands (2*q) then 1 else 0) .ECALL ++
+    enter (2*q+1) (work (2*q)) ++
+    List.replicate (d+1 - if expands (2*q+1) then 1 else 0) .ECALL ++
     (if q = 15 then root ++ decision else prologue (q+1))
 def copyCode (q d : ℕ) : Code :=
   copyBody q d ++ List.replicate (copyCapacity q - (copyBody q d).length) nop

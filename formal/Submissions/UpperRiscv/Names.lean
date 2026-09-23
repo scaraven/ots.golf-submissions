@@ -7,9 +7,10 @@ import Submissions.UpperRiscv.Semantics
 There are 32 chains of 32 hash steps. Chains 0–3 carry 160-bit states, chains 4–19
 carry 152-bit states and chains 20–31 carry 192-bit states. Chains are indexed in
 execution order, which is also the order of their 24-byte working cells; sixteen of
-the wire values already sit on that grid and need no expansion. Every hash returns
-256 bits; the next state is the slice starting at bit 64. A source is already
-state-width.
+the wire values already sit on that grid and need no expansion, and four more (chains
+7, 11, 15, 19) are hashed in place five bytes above their cells. Every hash returns
+256 bits; the next state is the slice starting at bit `truncOff k`: bit 64, or bit 104
+for the four chains hashed in place above their cells. A source is already state-width.
 
 The root commits to the low 192 bits of all 32 tops, in cell order, for 6144 bits
 (`rootCat`). The key-generation input lengths 152, 160, 192 and 6144 differ from the
@@ -41,6 +42,22 @@ theorem chainBits_ge (k : Fin 32) : 152 ≤ chainBits k := by
 
 theorem chainBits_le (k : Fin 32) : chainBits k ≤ 192 := by
   rcases chainBits_cases k with h | h | h <;> omega
+
+/-- Bit offset of a chain's next state inside a 256-bit answer: the answer is written eight
+bytes below the state, except for chains 7, 11, 15 and 19, which are hashed in place and whose
+answer starts thirteen bytes below it. -/
+def truncOff (k : Fin 32) : ℕ :=
+  if k.val = 7 ∨ k.val = 11 ∨ k.val = 15 ∨ k.val = 19 then 104 else 64
+
+theorem truncOff_add_le' : ∀ k : Fin 32, truncOff k + chainBits k ≤ 256 := by
+  decide +kernel
+
+theorem truncOff_add_le (k : Fin 32) : truncOff k + chainBits k ≤ 256 := truncOff_add_le' k
+
+theorem truncOff_mod8' : ∀ k : Fin 32, truncOff k % 8 = 0 := by
+  decide +kernel
+
+theorem truncOff_mod8 (k : Fin 32) : truncOff k % 8 = 0 := truncOff_mod8' k
 
 /-- Node names. -/
 inductive Name where
@@ -229,10 +246,10 @@ def lenF (v : Fin N) : ℕ := (ofFin v).len
 theorem lenF_fin (n : Name) : lenF n.fin = n.len := by
   rw [lenF, ofFin_fin]
 
-/-- Retain the state slice starting eight bytes into a hash output, or the entire
+/-- Retain the state slice starting `truncOff k` bits into a hash output, or the entire
 state when the input already has the chain's width. -/
 def trunc (k : Fin 32) {w : ℕ} (x : BitVec w) : BitVec (chainBits k) :=
-  x.extractLsb' (min 64 (w - chainBits k)) (chainBits k)
+  x.extractLsb' (min (truncOff k) (w - chainBits k)) (chainBits k)
 
 abbrev Asg := (v : Fin N) → BitVec (lenF v)
 

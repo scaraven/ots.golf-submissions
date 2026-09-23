@@ -54,10 +54,11 @@ theorem trunc_eq_self (k : Fin 32) (x : BitVec (chainBits k)) : trunc k x = x :=
 
 theorem trunc_trunc (k : Fin 32) {n : ℕ} (x : BitVec n) : trunc k (trunc k x) = trunc k x := trunc_eq_self k _
 
-/-- On a hash output, `trunc k` is the high 192 bits. -/
-theorem trunc_256 (k : Fin 32) (x : BitVec 256) : trunc k x = x.extractLsb' 64 (chainBits k) := by
+/-- On a hash output, `trunc k` is the state-width slice starting at bit `truncOff k`. -/
+theorem trunc_256 (k : Fin 32) (x : BitVec 256) :
+    trunc k x = x.extractLsb' (truncOff k) (chainBits k) := by
   unfold trunc
-  rw [Nat.min_eq_left (by have := chainBits_le k; omega)]
+  rw [Nat.min_eq_left (by have := truncOff_add_le k; omega : truncOff k ≤ 256 - chainBits k)]
 
 theorem cast_cast_eq {n m : ℕ} (h₁ : n = m) (h₂ : m = n) (x : BitVec n) :
     (x.cast h₁).cast h₂ = x := by
@@ -572,34 +573,46 @@ theorem card_filter_trunc128_le (a : BitVec 128) :
     (Finset.univ.filter fun w : BitVec 256 => trunc128 w = a).card ≤ 2 ^ 128 :=
   card_filter_setWidth_le 128 (by norm_num) a
 
-/-- Fixing the middle 152 bits leaves at most 104 unconstrained bits. This also
-bounds the wider chain slices. -/
-theorem card_filter_trunc_le' (k : Fin 32) (a : BitVec (chainBits k)) :
-    (Finset.univ.filter fun w : BitVec 256 => trunc k w = a).card ≤ 2 ^ 104 := by
-  have key : (Finset.univ.filter fun w : BitVec 256 => trunc k w = a).card ≤
-      (Finset.univ : Finset (BitVec 104)).card := by
+/-- At most `2 ^ (256 - c)` values of `256` bits have a given `c`-bit window at bit `o`. -/
+theorem card_filter_extract_le (o c : ℕ) (hoc : o + c ≤ 256) (a : BitVec c) :
+    (Finset.univ.filter fun w : BitVec 256 => w.extractLsb' o c = a).card ≤ 2 ^ (256 - c) := by
+  have key : (Finset.univ.filter fun w : BitVec 256 => w.extractLsb' o c = a).card ≤
+      (Finset.univ : Finset (BitVec (256 - o - c + o))).card := by
     refine Finset.card_le_card_of_injOn
-      (fun w => w.extractLsb' 216 40 ++ w.setWidth 64)
+      (fun w => (w >>> (o + c)).setWidth (256 - o - c) ++ w.setWidth o)
       (fun _ _ => Finset.mem_univ _) ?_
     intro w hw w' hw' e
     rw [Finset.mem_coe, Finset.mem_filter] at hw hw'
     apply BitVec.eq_of_getLsbD_eq
     intro i hi
-    by_cases hlo : i < 64
-    · have h := congrArg (fun x : BitVec 104 => x.getLsbD i) e
-      simpa only [BitVec.getLsbD_append, hlo, if_true, BitVec.getLsbD_setWidth, decide_true, Bool.true_and] using h
-    · by_cases hmid : i < 216
-      · have h := congrArg (fun x : BitVec (chainBits k) => x.getLsbD (i - 64))
-          (hw.2.trans hw'.2.symm)
-        have h1 : i - 64 < chainBits k := by have := chainBits_ge k; omega
-        have h2 : 64 + (i - 64) = i := by omega
-        simpa [trunc_256, BitVec.getLsbD_extractLsb', h1, h2] using h
-      · have h := congrArg (fun x : BitVec 104 => x.getLsbD (i - 152)) e
-        have h1 : ¬ i - 152 < 64 := by omega
-        have h2 : i - 152 - 64 < 40 := by omega
-        have h3 : 216 + (i - 152 - 64) = i := by omega
-        simpa only [BitVec.getLsbD_append, h1, if_false, BitVec.getLsbD_extractLsb', h2, decide_true, Bool.true_and, h3] using h
-  simpa using key
+    by_cases hlo : i < o
+    · have h := congrArg (fun x : BitVec (256 - o - c + o) => x.getLsbD i) e
+      simpa only [BitVec.getLsbD_append, hlo, if_true, BitVec.getLsbD_setWidth, decide_true,
+        Bool.true_and] using h
+    · by_cases hmid : i < o + c
+      · have h := congrArg (fun x : BitVec c => x.getLsbD (i - o)) (hw.2.trans hw'.2.symm)
+        have h1 : i - o < c := by omega
+        have h2 : o + (i - o) = i := by omega
+        simpa only [BitVec.getLsbD_extractLsb', h1, decide_true, Bool.true_and, h2] using h
+      · have h := congrArg (fun x : BitVec (256 - o - c + o) => x.getLsbD (i - c)) e
+        have h1 : ¬ i - c < o := by omega
+        have h2 : i - c - o < 256 - o - c := by omega
+        have h3 : o + c + (i - c - o) = i := by omega
+        simpa only [BitVec.getLsbD_append, h1, if_false, BitVec.getLsbD_setWidth, h2, decide_true,
+          Bool.true_and, BitVec.getLsbD_ushiftRight, h3] using h
+  have he : 256 - o - c + o = 256 - c := by omega
+  rw [Finset.card_univ, Fintype.card_bitVec, he] at key
+  exact key
+
+/-- Fixing a chain's state slice (at least 152 bits, at bit `truncOff k`) leaves at most 104
+unconstrained bits. -/
+theorem card_filter_trunc_le' (k : Fin 32) (a : BitVec (chainBits k)) :
+    (Finset.univ.filter fun w : BitVec 256 => trunc k w = a).card ≤ 2 ^ 104 := by
+  refine le_trans (Finset.card_le_card fun w hw => ?_)
+    ((card_filter_extract_le (truncOff k) (chainBits k) (truncOff_add_le k) a).trans
+      (Nat.pow_le_pow_right (by norm_num) (by have := chainBits_ge k; omega)))
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hw ⊢
+  exact (trunc_256 k w).symm.trans hw
 
 /-- The root slice pins 192 of the 256 bits of a top. -/
 theorem card_filter_rootSlice_le (k : Fin 32) (a : BitVec 192) :

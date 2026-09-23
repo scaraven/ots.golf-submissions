@@ -10,9 +10,6 @@ def PayloadFrom (s : MachineState) (payload : List Bool) (k : ℕ) : Prop :=
   ∀ j : Fin 32, k ≤ j.val →
     MemBits s (W (wireSlot j)) (ofBits (chainBits j) (payload.drop (wireOffset j)))
 
-def Holds (s : MachineState) (k : Fin 32) (v : BitVec (chainBits k)) : Prop :=
-  MemBits s (W (slot k)) v
-
 def rootSliceStart (_k : ℕ) : ℕ := 0
 def rootSlice (k : ℕ) (y : BitVec 256) : BitVec (rootSliceBits k) :=
   y.extractLsb' (rootSliceStart k) (rootSliceBits k)
@@ -38,22 +35,6 @@ theorem rootSlice_of_answer (s : MachineState) (k : Fin 32) (y : BitVec 256)
   rw [ho] at h
   have e := memBits_extract h (rootSlice_aligned k) (rootSlice_contained k)
   rw [W_add, ← rootSlice_address k] at e
-  exact e
-
-/-- Both state widths start 64 bits into the full hash output. -/
-theorem holds_of_answer (s : MachineState) (k : Fin 32) (y : BitVec 256)
-    (ho : s.getReg .x12 = W (outAddr k)) :
-    Holds (Riscv.writeHash s y) k (Forest.trunc k y) := by
-  have h := writeHash_memBits s y (by rw [ho]; exact aligned_W _ (output_bounds k).2.2 (by have := output_bounds k; omega))
-  rw [ho] at h
-  have e := memBits_extract (start := 64) (len := chainBits k) h (by decide)
-    (by change 64+chainBits k ≤ 256; have := chainBits_le k; omega)
-  have hs := slot_bounds k
-  rw [show (64:ℕ)/8=8 by decide, W_add,
-    show outAddr k+8=slot k by unfold outAddr; omega] at e
-  have ht : min 64 (256-chainBits k) = 64 := Nat.min_eq_left (by have := chainBits_le k; omega)
-  unfold Holds Forest.trunc
-  rw [ht]
   exact e
 
 /-- Byte intervals disjoint from the aligned 32-byte hash output retain their bits. -/

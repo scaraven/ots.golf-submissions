@@ -1,3 +1,53 @@
+# In-place chains above the cell: 360-cycle candidate
+
+This extends dhsorens's 364-cycle ascending cell grid (PR #28), which extends the 372-cycle dense
+dispatch and the constructions it credits. The notes of the 364 construction follow unchanged
+after this section.
+
+Assisted by: Claude Fable 5.1 (design), Claude Opus 5.5 (implementation)
+
+## What changes (364 -> 360)
+
+- **Machine.** Chains 7, 11, 15 and 19 (the last 152-bit value of each 96-byte wire group, at
+  group offset 77 = cell + 5) are hashed in place: `x12 = outAddr k` as before, `x10 = wireSlot k
+  = outAddr k + 13` for every hash, next state = answer bytes `[13, 32)`. Their buffer bytes
+  `[0, 13)` hold the previous chain's discarded top 8 bytes and already-read wire bytes, so no
+  unread input and no committed root byte is overwritten. Their entries lose `ECALL; ADDI x10,
+  x12, 8`, their copy bodies use 16-ECALL ladders, and prologues 4, 6, 8, 10 start from
+  `work (2q-1) = slot (2q-1) + 5`.
+- **Root, wire, rows, dispatch.** Unchanged. Each chain still commits its answer bytes `[0, 24)`
+  at `outAddr k`, so `R`, `rootCat` and the 12-block root hash are untouched.
+- **Accounting.** 40 + (189 + 64 + 12 + 32 + 2 = 299) + 21 = 360; 12340 instructions and
+  104 data bytes as before.
+
+## Proof changes
+
+- `Names.truncOff` (104 for chains 7, 11, 15, 19, else 64) and `trunc` at
+  `min (truncOff k) (w - chainBits k)`. `Values` adds `card_filter_extract_le` (256-bit words
+  with a fixed `c`-bit window at any offset), and `card_filter_trunc_le'` goes through it
+  (still `2 ^ 104`, since every state has at least 152 bits). No other security file reads the
+  offset.
+- `MixedProgram`: `expands k` (the wire value is neither at its cell nor five bytes above it)
+  and `work k` (`slot k` if the chain expands, else `wireSlot k`). The machine invariants
+  (`HashInv`, `HoldsAt`, `Prepared`, dispatch, landing) are stated at `work k`, and `prevInput`
+  is the previous chain's `work`. `MixedLayout.work_eq'`, `MixedEntry.prevInput_bounds'` and
+  `MixedChainFrame.prevInput_32` are kernel checks over all chains. The unused `Holds` and
+  `holds_of_answer`, which hard-coded offset 64, are removed.
+- `MixedCost`/`MixedPhase`: 12 early hashes, per-pair overhead 110, chains 299.
+
+## Validation status
+
+Checked on a CI mirror of the verifier: a GitHub Actions build of
+`Submissions.UpperRiscv.Solution` against the pinned `.contract`, with the policy, stub-statement,
+axiom and pinned-comparator checks. The hosted ots.golf verifier has not checked it yet. Before
+the push, a Python port of the edited image definitions reproduced the 364 image
+(12340 instructions, 104 data bytes), checked every new kernel table fact, and replayed byte
+provenance for 202 digit vectors: every first hash reads its wire value, every later hash reads
+exactly its own state, no unread signature byte is overwritten, and the root region holds bytes
+`[0, 24)` of every chain's final answer.
+
+---
+
 # Ascending cell grid: 364-cycle candidate
 
 This extends the officially verified 372-cycle dense-dispatch submission (PR #27,

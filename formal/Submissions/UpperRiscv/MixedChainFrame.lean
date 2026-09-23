@@ -61,7 +61,7 @@ theorem rootSlice_of_memAnswer {s : MachineState} (k : Fin 32) {y : BitVec 256}
   exact h
 
 theorem HashInv.complete {s : MachineState} {x : graph.Assignment} {k : Fin 32}
-    (inv : HashInv index wire pk s x k (slot k))
+    (inv : HashInv index wire pk s x k (work k))
     (answer : MemBits s (W (outAddr k)) (tops x k)) :
     ChainsInv index wire pk s x (k.val+1) := by
   refine ⟨inv.ctx, ?_, ?_, ?_, inv.payload, ?_⟩
@@ -87,8 +87,12 @@ theorem initial_chains (pk : PublicKey) (m : Message) (bits : List Bool) (answer
   · intro h; omega
   · intro j hj; omega
 
+/-- After the last chain (which is on the grid), `x10` is its cell. -/
+theorem prevInput_32 : prevInput 32 = slot 31 := by decide +kernel
+
 theorem final_root {s : MachineState} {x : graph.Assignment}
     (inv : ChainsInv index wire pk s x 32) : RootInv index pk s x := by
-  refine ⟨inv.ctx, inv.input, inv.out (by decide), completed_root s (tops x) inv.done⟩
+  refine ⟨inv.ctx, ?_, inv.out (by decide), completed_root s (tops x) inv.done⟩
+  rw [inv.input, prevInput_32]
 
 end OptimalOTS.RiscvMixedProgram
