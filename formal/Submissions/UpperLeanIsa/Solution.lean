@@ -25,3 +25,6 @@ import Submissions.UpperLeanIsa.Wire
 import Submissions.UpperLeanIsa.Stages
 import Submissions.UpperLeanIsa.Budget
 import Submissions.UpperLeanIsa.ConstraintMath
+import Submissions.UpperLeanIsa.CutTargets
+import Submissions.UpperLeanIsa.MachineProgram
+import Submissions.UpperLeanIsa.MachineRun
