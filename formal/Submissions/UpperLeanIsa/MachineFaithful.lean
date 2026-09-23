@@ -1059,6 +1059,7 @@ theorem faithful : machineSubmission.Faithful := by
     rw [simulateQ_bind, fixed_prover, pure_bind, simulateQ_map]
   have hver : machineSubmission.scheme.verify pk m bits = verify pk m bits := rfl
   generalize hL : LeanIsa.loadInput pk m bits (imageF f pk m bits) = L at hrun
+  generalize hN : N = n at hrun
   rw [simulateQ_bind, hrun, hver]
   simp only [simulateQ_bind, simulateQ_pure, fixed_verify, pure_bind]
   intro hmem
@@ -1071,6 +1072,7 @@ theorem faithful : machineSubmission.Faithful := by
   subst hb
   by_cases hacc : bits.length = 4352 ∧ rootValue f (reconstructedWords f m bits) = pk
   · subst hL
+    subst hN
     rw [run_of_holds (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f _
       (holds_honest f pk m bits hacc.1 hacc.2),
       mem_support_pure_iff] at ho
