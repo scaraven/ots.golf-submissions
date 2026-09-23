@@ -1058,6 +1058,7 @@ theorem faithful : machineSubmission.Faithful := by
         LeanIsa.runCost program (LeanIsa.loadInput pk m bits L) N Regs.initial) = _
     rw [simulateQ_bind, fixed_prover, pure_bind, simulateQ_map]
   have hver : machineSubmission.scheme.verify pk m bits = verify pk m bits := rfl
+  generalize hL : LeanIsa.loadInput pk m bits (imageF f pk m bits) = L at hrun
   rw [simulateQ_bind, hrun, hver]
   simp only [simulateQ_bind, simulateQ_pure, fixed_verify, pure_bind]
   intro hmem
@@ -1067,7 +1068,8 @@ theorem faithful : machineSubmission.Faithful := by
   rw [support_map] at hb
   obtain ⟨o, ho, rfl⟩ := hb
   by_cases hacc : bits.length = 4352 ∧ rootValue f (reconstructedWords f m bits) = pk
-  · rw [run_of_holds (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f _
+  · subst hL
+    rw [run_of_holds (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f _
       (holds_honest f pk m bits hacc.1 hacc.2),
       mem_support_pure_iff] at ho
     subst ho
@@ -1086,7 +1088,6 @@ theorem faithful : machineSubmission.Faithful := by
       rw [hverd] at hmem
       simp at hmem
     | some c =>
-      generalize hL : LeanIsa.loadInput pk m bits (imageF f pk m bits) = L at ho
       have hall := (run_complete (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f L ho).2.2
       subst hL
       exact hacc (fixed_sound (κ := 17) (show (16 : ℕ) ≤ 17 by decide) f pk m bits
