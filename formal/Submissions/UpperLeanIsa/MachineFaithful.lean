@@ -1086,9 +1086,12 @@ theorem faithful : machineSubmission.Faithful := by
       rw [hverd] at hmem
       simp at hmem
     | some c =>
-      obtain ⟨-, -, hall⟩ :=
-        run_complete (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f _ ho
-      exact hacc (fixed_sound (κ := 17) (show (16 : ℕ) ≤ 17 by decide) f pk m bits _ hall)
+      have hall : ∀ k < N,
+          Holds f (LeanIsa.loadInput pk m bits (imageF f pk m bits)) k :=
+        (run_complete (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f
+          (LeanIsa.loadInput pk m bits (imageF f pk m bits)) ho).2.2
+      exact hacc (fixed_sound (κ := 17) (show (16 : ℕ) ≤ 17 by decide) f pk m bits
+        (imageF f pk m bits) hall)
 
 end
 
