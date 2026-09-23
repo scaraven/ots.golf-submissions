@@ -194,46 +194,136 @@ theorem hv_ubLo : hv f pk m bits ubLoCell = ubLoV := by
   rw [hv_const f pk m bits (by decide) (by decide)]
   first | rfl | (unfold hConst; norm_num)
 
-theorem hv_chainId {i : ℕ} (hi : i < 34) : hv f pk m bits (chainIdCell i) = chainIdV i := by
-  rw [hv_const f pk m bits (by unfold chainIdCell; omega) (by unfold chainIdCell; omega)]
-  unfold hConst chainIdCell
-  split_ifs <;> first | omega | (congr 1 <;> omega)
+theorem hv_chainId {i : ℕ} (hi : i < 34) :
+    hv f pk m bits (chainIdCell i) = chainIdV i := by
+  show hv f pk m bits (64 + i) = chainIdV i
+  rw [hv_const f pk m bits (c := 64 + i) (by omega) (by omega)]
+  unfold hConst
+  have e0 : 64 + i - 64 = i := by omega
+  rw [if_neg (show ¬ (64 + i = 3) by omega),
+    if_neg (show ¬ (64 + i = 50) by omega),
+    if_neg (show ¬ (64 + i = 51) by omega),
+    if_pos (show 64 ≤ 64 + i ∧ 64 + i < 98 from ⟨by omega, by omega⟩),
+    e0]
 
-theorem hv_rootMd {r : ℕ} (hr : r < 34) : hv f pk m bits (rootMdCell r) = rootMdV r := by
-  rw [hv_const f pk m bits (by unfold rootMdCell; omega) (by unfold rootMdCell; omega)]
-  unfold hConst rootMdCell
-  split_ifs <;> first | omega | (congr 1 <;> omega)
+theorem hv_rootMd {r : ℕ} (hr : r < 34) :
+    hv f pk m bits (rootMdCell r) = rootMdV r := by
+  show hv f pk m bits (100 + r) = rootMdV r
+  rw [hv_const f pk m bits (c := 100 + r) (by omega) (by omega)]
+  unfold hConst
+  have e0 : 100 + r - 100 = r := by omega
+  rw [if_neg (show ¬ (100 + r = 3) by omega),
+    if_neg (show ¬ (100 + r = 50) by omega),
+    if_neg (show ¬ (100 + r = 51) by omega),
+    if_neg (show ¬ (64 ≤ 100 + r ∧ 100 + r < 98) from fun h => absurd h.2 (by omega)),
+    if_pos (show 100 ≤ 100 + r ∧ 100 + r < 134 from ⟨by omega, by omega⟩),
+    e0]
 
-theorem hv_pos {j : ℕ} (hj : j < 255) : hv f pk m bits (posCell j) = posV j := by
-  rw [hv_const f pk m bits (by unfold posCell; omega) (by unfold posCell; omega)]
-  unfold hConst posCell
-  split_ifs <;> first | omega | (congr 1 <;> omega)
+theorem hv_pos {j : ℕ} (hj : j < 255) :
+    hv f pk m bits (posCell j) = posV j := by
+  show hv f pk m bits (256 + j) = posV j
+  rw [hv_const f pk m bits (c := 256 + j) (by omega) (by omega)]
+  unfold hConst
+  have e0 : 256 + j - 256 = j := by omega
+  rw [if_neg (show ¬ (256 + j = 3) by omega),
+    if_neg (show ¬ (256 + j = 50) by omega),
+    if_neg (show ¬ (256 + j = 51) by omega),
+    if_neg (show ¬ (64 ≤ 256 + j ∧ 256 + j < 98) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (100 ≤ 256 + j ∧ 256 + j < 134) from fun h => absurd h.2 (by omega)),
+    if_pos (show 256 ≤ 256 + j ∧ 256 + j < 511 from ⟨by omega, by omega⟩),
+    e0]
 
 theorem hv_wvCell {p j : ℕ} (hp : p < 16) (hj : j < 255) :
     hv f pk m bits (wvCell p j) = wvV p j := by
-  rw [hv_const f pk m bits (by unfold wvCell; omega) (by unfold wvCell; omega)]
-  unfold hConst wvCell
-  split_ifs <;> first | omega | (congr 1 <;> omega)
+  show hv f pk m bits (1024 + 256 * p + j) = wvV p j
+  rw [hv_const f pk m bits (c := 1024 + 256 * p + j) (by omega) (by omega)]
+  unfold hConst
+  have e0 : (1024 + 256 * p + j - 1024) / 256 = p := by omega
+  have e1 : (1024 + 256 * p + j - 1024) % 256 = j := by omega
+  rw [if_neg (show ¬ (1024 + 256 * p + j = 3) by omega),
+    if_neg (show ¬ (1024 + 256 * p + j = 50) by omega),
+    if_neg (show ¬ (1024 + 256 * p + j = 51) by omega),
+    if_neg (show ¬ (64 ≤ 1024 + 256 * p + j ∧ 1024 + 256 * p + j < 98)
+      from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (100 ≤ 1024 + 256 * p + j ∧ 1024 + 256 * p + j < 134)
+      from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (256 ≤ 1024 + 256 * p + j ∧ 1024 + 256 * p + j < 511)
+      from fun h => absurd h.2 (by omega)),
+    if_pos (show 1024 ≤ 1024 + 256 * p + j ∧ 1024 + 256 * p + j < 5120 from ⟨by omega, by omega⟩),
+    e0,
+    e1]
 
-theorem hv_wu {j : ℕ} (hj : j < 255) : hv f pk m bits (wuCell j) = wuV j := by
-  rw [hv_const f pk m bits (by unfold wuCell; omega) (by unfold wuCell; omega)]
-  unfold hConst wuCell
-  split_ifs <;> first | omega | (congr 1 <;> omega)
+theorem hv_wu {j : ℕ} (hj : j < 255) :
+    hv f pk m bits (wuCell j) = wuV j := by
+  show hv f pk m bits (5120 + j) = wuV j
+  rw [hv_const f pk m bits (c := 5120 + j) (by omega) (by omega)]
+  unfold hConst
+  have e0 : 5120 + j - 5120 = j := by omega
+  rw [if_neg (show ¬ (5120 + j = 3) by omega),
+    if_neg (show ¬ (5120 + j = 50) by omega),
+    if_neg (show ¬ (5120 + j = 51) by omega),
+    if_neg (show ¬ (64 ≤ 5120 + j ∧ 5120 + j < 98) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (100 ≤ 5120 + j ∧ 5120 + j < 134) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (256 ≤ 5120 + j ∧ 5120 + j < 511) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (1024 ≤ 5120 + j ∧ 5120 + j < 5120) from fun h => absurd h.2 (by omega)),
+    if_pos (show 5120 ≤ 5120 + j ∧ 5120 + j < 5375 from ⟨by omega, by omega⟩),
+    e0]
 
-theorem hv_wuHi {j : ℕ} (hj : j < 255) : hv f pk m bits (wuHiCell j) = wuHiV j := by
-  rw [hv_const f pk m bits (by unfold wuHiCell; omega) (by unfold wuHiCell; omega)]
-  unfold hConst wuHiCell
-  split_ifs <;> first | omega | (congr 1 <;> omega)
+theorem hv_wuHi {j : ℕ} (hj : j < 255) :
+    hv f pk m bits (wuHiCell j) = wuHiV j := by
+  show hv f pk m bits (5376 + j) = wuHiV j
+  rw [hv_const f pk m bits (c := 5376 + j) (by omega) (by omega)]
+  unfold hConst
+  have e0 : 5376 + j - 5376 = j := by omega
+  rw [if_neg (show ¬ (5376 + j = 3) by omega),
+    if_neg (show ¬ (5376 + j = 50) by omega),
+    if_neg (show ¬ (5376 + j = 51) by omega),
+    if_neg (show ¬ (64 ≤ 5376 + j ∧ 5376 + j < 98) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (100 ≤ 5376 + j ∧ 5376 + j < 134) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (256 ≤ 5376 + j ∧ 5376 + j < 511) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (1024 ≤ 5376 + j ∧ 5376 + j < 5120) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (5120 ≤ 5376 + j ∧ 5376 + j < 5375) from fun h => absurd h.2 (by omega)),
+    if_pos (show 5376 ≤ 5376 + j ∧ 5376 + j < 5631 from ⟨by omega, by omega⟩),
+    e0]
 
-theorem hv_wuLo {j : ℕ} (hj : j < 255) : hv f pk m bits (wuLoCell j) = wuLoV j := by
-  rw [hv_const f pk m bits (by unfold wuLoCell; omega) (by unfold wuLoCell; omega)]
-  unfold hConst wuLoCell
-  split_ifs <;> first | omega | (congr 1 <;> omega)
+theorem hv_wuLo {j : ℕ} (hj : j < 255) :
+    hv f pk m bits (wuLoCell j) = wuLoV j := by
+  show hv f pk m bits (5632 + j) = wuLoV j
+  rw [hv_const f pk m bits (c := 5632 + j) (by omega) (by omega)]
+  unfold hConst
+  have e0 : 5632 + j - 5632 = j := by omega
+  rw [if_neg (show ¬ (5632 + j = 3) by omega),
+    if_neg (show ¬ (5632 + j = 50) by omega),
+    if_neg (show ¬ (5632 + j = 51) by omega),
+    if_neg (show ¬ (64 ≤ 5632 + j ∧ 5632 + j < 98) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (100 ≤ 5632 + j ∧ 5632 + j < 134) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (256 ≤ 5632 + j ∧ 5632 + j < 511) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (1024 ≤ 5632 + j ∧ 5632 + j < 5120) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (5120 ≤ 5632 + j ∧ 5632 + j < 5375) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (5376 ≤ 5632 + j ∧ 5632 + j < 5631) from fun h => absurd h.2 (by omega)),
+    if_pos (show 5632 ≤ 5632 + j ∧ 5632 + j < 5887 from ⟨by omega, by omega⟩),
+    e0]
 
-theorem hv_vb {p : ℕ} (hp : p < 16) : hv f pk m bits (vbCell p) = vbV p := by
-  rw [hv_const f pk m bits (by unfold vbCell; omega) (by unfold vbCell; omega)]
-  unfold hConst vbCell
-  split_ifs <;> first | omega | (congr 1 <;> omega)
+theorem hv_vb {p : ℕ} (hp : p < 16) :
+    hv f pk m bits (vbCell p) = vbV p := by
+  show hv f pk m bits (5890 + p) = vbV p
+  rw [hv_const f pk m bits (c := 5890 + p) (by omega) (by omega)]
+  unfold hConst
+  have e0 : 5890 + p - 5890 = p := by omega
+  rw [if_neg (show ¬ (5890 + p = 3) by omega),
+    if_neg (show ¬ (5890 + p = 50) by omega),
+    if_neg (show ¬ (5890 + p = 51) by omega),
+    if_neg (show ¬ (64 ≤ 5890 + p ∧ 5890 + p < 98) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (100 ≤ 5890 + p ∧ 5890 + p < 134) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (256 ≤ 5890 + p ∧ 5890 + p < 511) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (1024 ≤ 5890 + p ∧ 5890 + p < 5120) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (5120 ≤ 5890 + p ∧ 5890 + p < 5375) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (5376 ≤ 5890 + p ∧ 5890 + p < 5631) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (5632 ≤ 5890 + p ∧ 5890 + p < 5887) from fun h => absurd h.2 (by omega)),
+    if_neg (show ¬ (5890 + p = 5888) by omega),
+    if_neg (show ¬ (5890 + p = 5889) by omega),
+    if_pos (show 5890 ≤ 5890 + p ∧ 5890 + p < 5906 from ⟨by omega, by omega⟩),
+    e0]
 
 /-! ### The pinned cells -/
 
@@ -952,9 +1042,10 @@ theorem sound (S : LeanIsa.Submission) (hs : S.scheme = scheme) (hp : S.program 
     rw [if_pos hlen, hroot] at hmem
     simp at hmem
 
+set_option linter.constructorNameAsVariable false in
 /-- **Faithful**: the honest prover's run completes exactly when the verifier accepts. -/
 theorem faithful : machineSubmission.Faithful := by
-  refine ⟨by decide, by decide, ?_⟩
+  refine ⟨show minLogMem ≤ 17 by decide, show (17 : ℕ) ≤ maxLogMem by decide, ?_⟩
   intro pk m bits
   apply probTrue_zero_of_fixed
   intro f
@@ -976,7 +1067,8 @@ theorem faithful : machineSubmission.Faithful := by
   rw [support_map] at hb
   obtain ⟨o, ho, rfl⟩ := hb
   by_cases hacc : bits.length = 4352 ∧ rootValue f (reconstructedWords f m bits) = pk
-  · rw [run_of_holds (by decide) f _ (holds_honest f pk m bits hacc.1 hacc.2),
+  · rw [run_of_holds (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f _
+      (holds_honest f pk m bits hacc.1 hacc.2),
       mem_support_pure_iff] at ho
     subst ho
     rw [if_pos hacc.1, hacc.2] at hmem
@@ -994,8 +1086,9 @@ theorem faithful : machineSubmission.Faithful := by
       rw [hverd] at hmem
       simp at hmem
     | some c =>
-      obtain ⟨-, -, hall⟩ := run_complete (by decide) f _ ho
-      exact hacc (fixed_sound (by decide) f pk m bits _ hall)
+      obtain ⟨-, -, hall⟩ :=
+        run_complete (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f _ ho
+      exact hacc (fixed_sound (κ := 17) (show (16 : ℕ) ≤ 17 by decide) f pk m bits _ hall)
 
 end
 
