@@ -31,7 +31,6 @@ set_option backward.isDefEq.respectTransparency.types false
 
 /- The programs are only ever unfolded through their equation lemmas; keeping them irreducible
 stops the unifier from unrolling `chain … 255 …` or `tabulate` at a literal size. -/
-attribute [local irreducible] chain rootFold tabulate
 
 /-! ## Averaging over one coordinate (generic) -/
 
