@@ -557,11 +557,19 @@ private theorem E_run_tabulate_chains (sk : Words) :
             (progUpd (sk, y) (ChainSeg (φ 0) 0 255) (c y)))
             (fun p' => G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩) p'.1 :
               Fin (n + 1) → Word), p'.2)) :=
-          E_run_chain_avg sk (φ 0) (fun y (p : Word × Cache) =>
-              E (run (tabulate fun t : Fin n => chain (φ t.succ).val 0 255 (sk (φ t.succ))) p.2)
-                (fun p' => G y ((Fin.cases p.1 p'.1 : Fin (n + 1) → Word), p'.2)))
-            255 0 (by omega) (fun _ => sk (φ 0)) c (fun y => (word_zero sk y (φ 0)).symm)
-            (fun y => hfr y 0) (fun y k u _ => hc y 0 k u) hG₁
+          by
+            have hx0 : ∀ y : Tbl, sk (φ 0) = Record.word (sk, y) (φ 0) ⟨0, by omega⟩ :=
+              fun y => (word_zero sk y (φ 0)).symm
+            have hfr0 : ∀ y : Tbl, FreshChain (c y) (φ 0) 0 := fun y => hfr y 0
+            have hc0 : ∀ y (k : Fin 255) u, 0 ≤ k.val →
+                c (Function.update y (.inl (φ 0, k)) u) = c y := fun y k u _ => hc y 0 k u
+            have hstep := E_run_chain_avg sk (φ 0) (fun y (p : Word × Cache) =>
+                E (run (tabulate fun t : Fin n => chain (φ t.succ).val 0 255 (sk (φ t.succ)))
+                  p.2) (fun p' => G y ((Fin.cases p.1 p'.1 : Fin (n + 1) → Word), p'.2)))
+              255 0 (by omega) (fun _ => sk (φ 0)) c hx0 hfr0 hc0 hG₁
+            first
+              | simpa only using hstep
+              | exact hstep
       _ = ∑ y : Tbl, Nt * G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩)
               (fun t => Record.endpoint (sk, y) (φ t.succ)) : Fin (n + 1) → Word),
             progUpd (sk, y) (ChainsOf fun t => φ t.succ)
