@@ -57,10 +57,9 @@ theorem mem_support_run_keygen (ξ : Record) :
     exact le_of_eq (ind_not hne)
   rw [E_run_keygen] at h0
   have hall := Iff.mp (Fintype.sum_eq_zero_iff_of_nonneg (fun _ => zero_le)) h0
-  have h2 := congrFun hall ξ
-  have h1 : ind (((ξ.publicKey, ξ.1), ξ.cache) = ((ξ.publicKey, ξ.1), ξ.cache)) = 1 :=
-    ind_of rfl
-  simp only [h1, mul_one, Pi.zero_apply] at h2
+  have h2 : w * ind (((ξ.publicKey, ξ.1), ξ.cache) = ((ξ.publicKey, ξ.1), ξ.cache)) = 0 :=
+    congrFun hall ξ
+  rw [ind_of rfl, mul_one] at h2
   exact w_ne_zero_stg h2
 
 /-- The budget of the experiment is a budget of the continuation after key generation, at every
@@ -125,12 +124,12 @@ theorem exists_of_mem_image_univ_gen {α β : Type*} [Fintype α] [DecidableEq �
 
 theorem mem_dataSet₀ (ξ : Record) : publicData beforeSigning ξ ∈ dataSet₀ := by
   unfold dataSet₀
-  exact mem_image_univ_gen _ ξ
+  exact mem_image_univ_gen (publicData beforeSigning) ξ
 
 theorem exists_of_mem_dataSet₀ {v : PublicData} (hv : v ∈ dataSet₀) :
     ∃ ξ, publicData beforeSigning ξ = v := by
   unfold dataSet₀ at hv
-  exact exists_of_mem_image_univ_gen hv
+  exact exists_of_mem_image_univ_gen (f := publicData beforeSigning) (b := v) hv
 
 attribute [local irreducible] dataSet₀
 
