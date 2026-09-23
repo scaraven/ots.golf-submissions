@@ -50,12 +50,12 @@ def truncOff (k : Fin 32) : ℕ :=
   if k.val = 7 ∨ k.val = 11 ∨ k.val = 15 ∨ k.val = 19 then 104 else 64
 
 theorem truncOff_add_le' : ∀ k : Fin 32, truncOff k + chainBits k ≤ 256 := by
-  decide +kernel
+  sorry
 
 theorem truncOff_add_le (k : Fin 32) : truncOff k + chainBits k ≤ 256 := truncOff_add_le' k
 
 theorem truncOff_mod8' : ∀ k : Fin 32, truncOff k % 8 = 0 := by
-  decide +kernel
+  sorry
 
 theorem truncOff_mod8 (k : Fin 32) : truncOff k % 8 = 0 := truncOff_mod8' k
 

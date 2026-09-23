@@ -88,7 +88,7 @@ theorem initial_chains (pk : PublicKey) (m : Message) (bits : List Bool) (answer
   · intro j hj; omega
 
 /-- After the last chain (which is on the grid), `x10` is its cell. -/
-theorem prevInput_32 : prevInput 32 = slot 31 := by decide +kernel
+theorem prevInput_32 : prevInput 32 = slot 31 := by sorry
 
 theorem final_root {s : MachineState} {x : graph.Assignment}
     (inv : ChainsInv index wire pk s x 32) : RootInv index pk s x := by

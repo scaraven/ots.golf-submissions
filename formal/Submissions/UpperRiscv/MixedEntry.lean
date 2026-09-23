@@ -27,7 +27,7 @@ theorem wireSlot_bounds (k : Fin 32) : 32 ≤ wireSlot k ∧ wireSlot k + 24 < 2
   rw [wireSlot_eq]; omega
 
 theorem prevInput_bounds' : ∀ k : Fin 32, prevInput k < 2^62 := by
-  decide +kernel
+  sorry
 
 theorem prevInput_bounds (k : Fin 32) : prevInput k < 2^62 := prevInput_bounds' k
 

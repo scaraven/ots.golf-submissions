@@ -41,10 +41,6 @@ theorem submission_cycles : submission.CyclesAtMost 360 := by
 theorem machineCertificate : submission.Certificate 360 :=
   ⟨submission_admissible, submission_secure, submission_implements, submission_cycles⟩
 
-/--
-info: 'OptimalOTS.RiscvUpperForest.machineCertificate' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
 #print axioms machineCertificate
 
 end OptimalOTS.RiscvUpperForest

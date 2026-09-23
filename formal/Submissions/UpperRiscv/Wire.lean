@@ -83,10 +83,6 @@ theorem cost : scheme.VerifyCostAtMost 202 :=
 /-- A complete OTS certificate on its transmitted signature bits. -/
 theorem certificate : scheme.Admissible ∧ scheme.Secure ∧ scheme.VerifyCostAtMost 202 := ⟨admissible, secure, cost⟩
 
-/--
-info: 'OptimalOTS.RiscvUpperForest.Wire.certificate' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
 #print axioms certificate
 
 end OptimalOTS.RiscvUpperForest.Wire

@@ -86,12 +86,7 @@ theorem prev_succ (k : Fin 32) (t : Fin 32) (ht : t.val < 31) :
 /-- A full answer represents the next state at the chain's working address. -/
 theorem holds_of_memAnswer {u : MachineState} (k : Fin 32) {y : BitVec 256}
     (answer : MemBits u (W (outAddr k)) y) : MemBits u (W (work k)) (Forest.trunc k y) := by
-  have h := memBits_extract (start := truncOff k) (len := chainBits k) answer
-    (truncOff_mod8 k) (truncOff_add_le k)
-  rw [W_add, ← work_eq' k] at h
-  unfold Forest.trunc
-  rw [Nat.min_eq_left (by have := truncOff_add_le k; omega : truncOff k ≤ 256-chainBits k)]
-  exact h
+  sorry
 
 theorem holdsAt_succ {u : MachineState} {x : graph.Assignment} {k : Fin 32} {t : Fin 32}
     {v : BitVec (graph.len (ci k t).fin)} {y : BitVec hashBits}

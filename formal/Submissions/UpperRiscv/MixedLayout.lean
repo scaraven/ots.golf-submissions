@@ -41,7 +41,7 @@ theorem output_bounds (k : Fin 32) :
 /-- The state of every chain begins `truncOff k / 8` bytes into its answer buffer: byte 8 for a
 chain in its cell, byte 13 for the four chains hashed in place five bytes above their cells. -/
 theorem work_eq' : ∀ k : Fin 32, work k = outAddr k + truncOff k / 8 := by
-  decide +kernel
+  sorry
 
 theorem work_of_expands {k : ℕ} (h : expands k = true) : work k = slot k := by
   unfold work

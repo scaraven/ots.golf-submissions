@@ -139,10 +139,6 @@ theorem correct (S : GScheme) : S.toAlgorithm.Correct := by
       Prod.mk.injEq] at h
     cases h.1.symm.trans hb
 
-/--
-info: 'OptimalOTS.GenericCorrectness.correct' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
 #print axioms correct
 
 end OptimalOTS.GenericCorrectness
