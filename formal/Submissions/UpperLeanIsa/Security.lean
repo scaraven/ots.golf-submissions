@@ -124,12 +124,14 @@ theorem exists_of_mem_image_univ_gen {α β : Type*} [Fintype α] [DecidableEq �
 
 theorem mem_dataSet₀ (ξ : Record) : publicData beforeSigning ξ ∈ dataSet₀ := by
   unfold dataSet₀
-  exact mem_image_univ_gen (publicData beforeSigning) ξ
+  simp only [Finset.mem_image, Finset.mem_univ, true_and]
+  exact ⟨ξ, rfl⟩
 
 theorem exists_of_mem_dataSet₀ {v : PublicData} (hv : v ∈ dataSet₀) :
     ∃ ξ, publicData beforeSigning ξ = v := by
   unfold dataSet₀ at hv
-  exact exists_of_mem_image_univ_gen (f := publicData beforeSigning) (b := v) hv
+  simp only [Finset.mem_image, Finset.mem_univ, true_and] at hv
+  exact hv
 
 attribute [local irreducible] dataSet₀
 
