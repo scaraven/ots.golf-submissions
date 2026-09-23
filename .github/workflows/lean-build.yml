@@ -148,7 +148,10 @@ jobs:
           t2=$(date +%s)
           echo "cache_get_s=$((t1 - t0))" >> "$GITHUB_OUTPUT"
           echo "contract_s=$((t2 - t1))" >> "$GITHUB_OUTPUT"
-          echo "::group::.lake sizes"; du -sh .lake .lake/build .lake/packages/* 2>/dev/null | sort -h; df -h .; echo "::endgroup::"
+          echo "::group::.lake sizes"
+          for d in .lake/build .lake/packages/*; do du -sh "$d"; done | sort -h
+          du -sh .lake; df -h .
+          echo "::endgroup::"
           {
             echo "## Warm .lake"
             echo "- actions/cache: hit=\`${{ steps.lake-cache.outputs.cache-hit }}\` matched=\`${{ steps.lake-cache.outputs.cache-matched-key }}\`; artifact restored=\`${{ steps.warm.outputs.restored }}\`"
@@ -191,7 +194,8 @@ jobs:
           rm -rf .contract/formal/Submissions
           mkdir -p "$(dirname "$dest")"
           cp -a "${{ steps.p.outputs.source_root }}" "$dest"
-          ls -la "$dest" | head -n 5; echo "... $(ls "$dest" | wc -l) entries"
+          n=$(find "$dest" -mindepth 1 | wc -l)
+          echo "staged ${{ steps.p.outputs.source_root }} -> $dest: $n entries, claim.txt=$(cat "$dest/claim.txt" 2>/dev/null || echo missing)"
 
       - name: Policy check (pin_contract.py, check_submission.py)
         id: policy
@@ -340,6 +344,7 @@ jobs:
       - name: Verdict
         if: always()
         env:
+          JOB_STATUS: ${{ job.status }}
           DEPS: ${{ steps.deps.outcome }}
           POLICY: ${{ steps.policy.outcome }}
           BUILD: ${{ steps.build.outcome }}
@@ -358,8 +363,10 @@ jobs:
             echo "| stub statements + axioms | ${AXIOMS:-skipped} |"
             echo "| comparator tools | ${TOOLS:-skipped} |"
             echo "| comparator | ${COMPARATOR:-skipped} |"
+            echo "| all other steps | ${JOB_STATUS} |"
           } >> "$GITHUB_STEP_SUMMARY"
           fail=0
+          [ "$JOB_STATUS" = success ] || fail=1
           for v in "$DEPS" "$POLICY" "$BUILD" "$AXIOMS" "$COMPARATOR"; do
             [ "$v" = failure ] && fail=1
           done
