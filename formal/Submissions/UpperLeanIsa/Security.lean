@@ -56,11 +56,11 @@ theorem mem_support_run_keygen (ξ : Record) :
       exact hp
     exact le_of_eq (ind_not hne)
   rw [E_run_keygen] at h0
-  have hall := Iff.mp (Finset.sum_eq_zero_iff_of_nonneg (fun _ _ => zero_le)) h0
-  have h2 := hall ξ (Finset.mem_univ _)
+  have hall := Iff.mp (Fintype.sum_eq_zero_iff_of_nonneg (fun _ => zero_le)) h0
+  have h2 := congrFun hall ξ
   have h1 : ind (((ξ.publicKey, ξ.1), ξ.cache) = ((ξ.publicKey, ξ.1), ξ.cache)) = 1 :=
     ind_of rfl
-  simp only [h1, mul_one] at h2
+  simp only [h1, mul_one, Pi.zero_apply] at h2
   exact w_ne_zero_stg h2
 
 /-- The budget of the experiment is a budget of the continuation after key generation, at every
@@ -112,15 +112,25 @@ theorem fiber₀_eq_filter_sec (v : PublicData) :
 otherwise be evaluated by `whnf`. -/
 def dataSet₀ : Finset PublicData := Finset.univ.image (publicData beforeSigning)
 
+/-- Generic form, so that no membership in the concrete `Finset.univ : Finset Record` is ever
+elaborated or unfolded. -/
+theorem mem_image_univ_gen {α β : Type*} [Fintype α] [DecidableEq β] (f : α → β) (a : α) :
+    f a ∈ Finset.univ.image f :=
+  Finset.mem_image_of_mem f (Finset.mem_univ a)
+
+theorem exists_of_mem_image_univ_gen {α β : Type*} [Fintype α] [DecidableEq β] {f : α → β}
+    {b : β} (h : b ∈ Finset.univ.image f) : ∃ a, f a = b := by
+  obtain ⟨a, -, ha⟩ := Finset.mem_image.1 h
+  exact ⟨a, ha⟩
+
 theorem mem_dataSet₀ (ξ : Record) : publicData beforeSigning ξ ∈ dataSet₀ := by
   unfold dataSet₀
-  exact Finset.mem_image_of_mem _ (Finset.mem_univ _)
+  exact mem_image_univ_gen _ ξ
 
 theorem exists_of_mem_dataSet₀ {v : PublicData} (hv : v ∈ dataSet₀) :
     ∃ ξ, publicData beforeSigning ξ = v := by
   unfold dataSet₀ at hv
-  obtain ⟨ξ, -, hξ⟩ := Finset.mem_image.1 hv
-  exact ⟨ξ, hξ⟩
+  exact exists_of_mem_image_univ_gen hv
 
 attribute [local irreducible] dataSet₀
 
