@@ -50,10 +50,9 @@ jobs:
       SOURCE_ROOT: ${{ inputs.source_root || '' }}
       RUN_COMPARATOR: ${{ github.event_name != 'workflow_dispatch' || inputs.comparator }}
       GH_TOKEN: ${{ github.token }}
-      # The warm .lake minus Mathlib's oleans, which `lake exe cache get` restores every run.
-      LAKE_CACHE_PATHS: |
-        .contract/formal/.lake
-        !.contract/formal/.lake/packages/mathlib/.lake/build
+      # The whole warm .lake (packages, Mathlib oleans, contract build). actions/cache cannot
+      # exclude a subdirectory of a cached directory, so the per-branch cache holds everything.
+      LAKE_CACHE_PATHS: .contract/formal/.lake
     steps:
       - name: Checkout (with the pinned .contract submodule)
         uses: actions/checkout@v7
@@ -118,7 +117,8 @@ jobs:
           restore-keys: ${{ steps.p.outputs.lake_key_prefix }}
 
       # Branch caches are invisible to other branches (except the default branch, which this
-      # workflow never runs on), so a cold branch pulls the warm .lake from an artifact instead.
+      # workflow never runs on), so a cold branch pulls the warm .lake from an artifact instead
+      # (packed without Mathlib's oleans; `lake exe cache get` below restores those).
       - name: Restore warm .lake (artifact from any branch)
         id: warm
         if: steps.lake-cache.outputs.cache-hit != 'true'
@@ -153,12 +153,13 @@ jobs:
             echo "## Warm .lake"
             echo "- actions/cache: hit=\`${{ steps.lake-cache.outputs.cache-hit }}\` matched=\`${{ steps.lake-cache.outputs.cache-matched-key }}\`; artifact restored=\`${{ steps.warm.outputs.restored }}\`"
             echo "- \`lake exe cache get\`: $((t1 - t0)) s; \`lake build OptimalOTS\`: $((t2 - t1)) s"
-            echo "- size without Mathlib oleans: $(du -sh --exclude='*/packages/mathlib/.lake/build' .lake | cut -f1)"
+            total_m=$(du -sm .lake | cut -f1); mathlib_m=$(du -sm .lake/packages/mathlib/.lake/build | cut -f1)
+            echo "- size on disk: ${total_m} MiB, of which Mathlib oleans ${mathlib_m} MiB"
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save warm .lake (actions/cache)
-        if: steps.lake-cache.outputs.cache-hit != 'true' && steps.warm.outputs.restored != 'true'
+        if: steps.lake-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: ${{ env.LAKE_CACHE_PATHS }}

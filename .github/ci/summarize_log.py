@@ -35,7 +35,7 @@ def peak_from_time(lines: list[str]) -> str | None:
     for line in lines:
         m = re.search(r"Maximum resident set size \(kbytes\):\s*(\d+)", line)
         if m:
-            return f"{int(m.group(1)) / 1024 / 1024:.2f} GiB (largest single process, /usr/bin/time)"
+            return f"{int(m.group(1)) / 1024 / 1024:.2f} GiB (largest single process incl. mmapped .oleans, /usr/bin/time)"
     return None
 
 
@@ -72,7 +72,9 @@ def main() -> int:
         md.append(f"- outcome: **{a.outcome}**")
     if a.seconds:
         s = int(a.seconds)
-        md.append(f"- wall time: {s // 60} min {s % 60} s")
+        md.append(f"- wall time: {s // 60} min {s % 60} s"
+                  + (" (over 20 min: the hosted verifier's wall-clock limit, on different hardware)"
+                     if s > 1200 else ""))
     peak = peak_from_time(lines)
     if peak:
         md.append(f"- peak RSS: {peak}")
@@ -81,6 +83,11 @@ def main() -> int:
         if pm:
             md.append(f"- peak memory: {pm}")
     md.append(f"- `error:` lines: {len(err_idx)}; `warning:` lines: {warn_count}; log lines: {len(lines)}")
+    size = len(text.encode("utf-8", errors="replace"))
+    md.append(f"- log size: {size:,} bytes"
+              + (" -- **over the hosted verifier's 4 MiB output cap (4,194,304 bytes); output there is"
+                 " truncated and can cause rejection**" if size > 4 * 1024 * 1024 else
+                 " (hosted verifier caps combined output at 4 MiB)"))
     md.append("")
 
     if err_idx:
