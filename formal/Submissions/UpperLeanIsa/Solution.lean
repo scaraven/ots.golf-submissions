@@ -28,3 +28,7 @@ import Submissions.UpperLeanIsa.ConstraintMath
 import Submissions.UpperLeanIsa.CutTargets
 import Submissions.UpperLeanIsa.MachineProgram
 import Submissions.UpperLeanIsa.MachineRun
+import Submissions.UpperLeanIsa.Transcript
+import Submissions.UpperLeanIsa.Events
+import Submissions.UpperLeanIsa.StageB
+import Submissions.UpperLeanIsa.StageA

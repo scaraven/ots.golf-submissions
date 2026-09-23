@@ -260,7 +260,7 @@ theorem zero_append_three (y : BitVec 128) :
     first
     | rfl
     | simp
-  have hy : y.toNat < 2 ^ 512 := lt_trans y.isLt (by norm_num)
+  have hy := BitVec.toNat_lt_twoPow_of_le (by decide : 128 ≤ 512) (x := y)
   rw [BitVec.toNat_setWidth]
   simp only [BitVec.toNat_append, h0, Nat.zero_shiftLeft, Nat.zero_or]
   exact (Nat.mod_eq_of_lt hy).symm
@@ -348,22 +348,25 @@ theorem rootValueFold_ofFn (f : HashTable) (n : ℕ) : ∀ (w : ℕ → Word) (c
     | simp only [List.ofFn_zero, rootValueFold]
   | succ n ih =>
     intro w c hc
-    have e0 : c 1 = f ⟨896, hashInput (c 0) ((w 0).setWidth 512) (BitVec.ofNat 128 (2 + n))⟩ := by
+    have e0 : f ⟨896, hashInput (c 0) ((w 0).setWidth 512) (BitVec.ofNat 128 (2 + n))⟩ = c 1 := by
       have h := hc 0 (Nat.succ_pos n)
-      rw [show n + 1 - 1 - 0 = n by omega] at h
-      exact h
+      rw [show n + 1 - 1 - 0 = n by omega, Nat.zero_add] at h
+      exact h.symm
     have hrest := ih (fun k => w (k + 1)) (fun k => c (k + 1)) (fun k hk => by
       have h := hc (k + 1) (by omega)
       rw [show n + 1 - 1 - (k + 1) = n - 1 - k by omega] at h
       exact h)
-    have hrest' : rootValueFold f (List.ofFn fun i : Fin n => w ((i : ℕ) + 1))
-        (f ⟨896, hashInput (c 0) ((w 0).setWidth 512) (BitVec.ofNat 128 (2 + n))⟩) =
-        c (n + 1) := by
-      rw [← e0]
-      exact hrest
+    -- `hrest : rootValueFold f (List.ofFn fun i => w (↑i + 1)) (c 1) = c (n + 1)`
+    simp only [Nat.zero_add] at hrest
     rw [List.ofFn_succ]
-    simp only [rootValueFold, List.length_ofFn]
-    exact hrest'
+    -- Normalise the goal to exactly `hrest`'s left side with rewrites only: closing by `exact`
+    -- up to defeq would unfold `hashInput`/`toBits` (the CI max-recursion failure).
+    first
+    | (simp only [rootValueFold, List.length_ofFn, Fin.val_zero, Fin.val_succ, e0]
+       rw [hrest])
+    | (simp only [rootValueFold, List.length_ofFn]
+       simp only [Fin.val_zero, Fin.val_succ, Fin.succ, e0]
+       rw [hrest])
 
 /-- Soundness of the root. States `(lo k, hi k)` start at zero; absorb `k` hashes endpoint
 `e k` with metadata `2 + (33 - k)`; then `lo 34` holds `rootValue f xs`. -/
@@ -606,7 +609,7 @@ theorem inputWord_two (pk : PublicKey) (m : Message) (σ : List Bool) :
     omega
   have hm2 : 128 ≤ ((toBits m).drop 128).length := by
     rw [List.length_drop, hm]
-    omega
+    all_goals omega
   have hslice : ((toBits m).drop 128).take 128 = toBits (m.extractLsb' 128 128) :=
     take_drop_toBits m 128 128 (by show 128 + 128 ≤ 256; omega)
   have h : ((statementBits pk m σ).drop (2 * 128)).take 128 =
