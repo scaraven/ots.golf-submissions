@@ -54,19 +54,20 @@ theorem fixed_seqAnswers (f : HashTable) (q : ℕ → Answers → BitVec 896) (A
   | zero =>
     simp only [seqAnswers, simulateQ_pure]
     congr 1
-    funext j
-    exact (if_neg (Nat.not_lt_zero j)).symm
+    all_goals
+      funext j
+      exact (if_neg (Nat.not_lt_zero j)).symm
   | succ n ih =>
     have hqn : q n (cutAns n A) = q n A := hq n _ (fun k hk => cutAns_of_lt A hk)
-    simp only [seqAnswers, simulateQ_bind, simulateQ_pure, ih, pure_bind, hqn, fixed_hash]
+    simp only [seqAnswers, simulateQ_bind, simulateQ_pure, ih, pure_bind, fixed_hash]
     congr 1
     funext j
     by_cases hj : j = n
-    · rw [hj, if_pos rfl]
-      show f ⟨896, q n A⟩ = (if n < n + 1 then A n else 0)
-      rw [if_pos (Nat.lt_succ_self n)]
-      exact (hA n).symm
-    · rw [if_neg hj]
+    · rw [hj]
+      refine (if_pos rfl).trans ?_
+      rw [hqn, ← hA n]
+      exact (cutAns_of_lt A (Nat.lt_succ_self n)).symm
+    · refine (if_neg hj).trans ?_
       show (if j < n then A j else 0) = (if j < n + 1 then A j else 0)
       by_cases hjn : j < n
       · rw [if_pos hjn, if_pos (show j < n + 1 by omega)]
@@ -136,9 +137,8 @@ theorem xOf_chainAnsF (f : HashTable) (i d : ℕ) (σ : Word) (j : ℕ) :
 
 theorem chainAnsF_spec (f : HashTable) (i d : ℕ) (σ : Word) (j : ℕ) :
     chainAnsF f i d σ j = f ⟨896, chainQ i d σ j (chainAnsF f i d σ)⟩ := by
-  show f ⟨896, chainInput i j (if j ≤ d then σ else chainXF f i d σ j)⟩ =
-    f ⟨896, chainInput i j (if j ≤ d then σ else xOf σ (chainAnsF f i d σ) j)⟩
-  rw [xOf_chainAnsF]
+  unfold chainQ inW
+  rw [xOf_chainAnsF, chainAnsF]
 
 theorem fixed_chainAnswers (f : HashTable) (i d : ℕ) (σ : Word) :
     simulateQ (unifFwdAnswerImpl f) (chainAnswers i d σ) =
@@ -237,13 +237,14 @@ theorem stOf_rootAnsF (f : HashTable) (ends : ℕ → Word) (k : ℕ) :
   | zero => rfl
   | succ k => rfl
 
+theorem rootStF_succ (f : HashTable) (ends : ℕ → Word) (k : ℕ) :
+    rootStF f ends (k + 1) = f ⟨896, LeanIsa.hashInput (rootStF f ends k)
+      ((ends k).setWidth 512) (BitVec.ofNat 128 (2 + (33 - k)))⟩ := rfl
+
 theorem rootAnsF_spec (f : HashTable) (ends : ℕ → Word) (k : ℕ) :
     rootAnsF f ends k = f ⟨896, rootQ ends k (rootAnsF f ends)⟩ := by
-  show f ⟨896, LeanIsa.hashInput (rootStF f ends k) ((ends k).setWidth 512)
-      (BitVec.ofNat 128 (2 + (33 - k)))⟩ =
-    f ⟨896, LeanIsa.hashInput (stOf (rootAnsF f ends) k) ((ends k).setWidth 512)
-      (BitVec.ofNat 128 (2 + (33 - k)))⟩
-  rw [stOf_rootAnsF]
+  unfold rootQ
+  rw [stOf_rootAnsF, rootAnsF, rootStF_succ]
 
 theorem fixed_rootAnswers (f : HashTable) (ends : ℕ → Word) :
     simulateQ (unifFwdAnswerImpl f) (rootAnswers ends) = pure (cutAns 34 (rootAnsF f ends)) :=
@@ -296,7 +297,7 @@ theorem rootValue_states (f : HashTable) (w : Fin 34 → Word) (ends : ℕ → W
 theorem rootValueFold_rootStF (f : HashTable) (w : Fin 34 → Word) (ends : ℕ → Word)
     (hw : ∀ t : Fin 34, w t = ends t) :
     rootValueFold f (List.ofFn w) 0 = rootStF f ends 34 :=
-  rootValueFold_states f w ends hw (rootStF f ends) rfl (fun _ _ => rfl)
+  rootValueFold_states f w ends hw (rootStF f ends) rfl (fun k _ => rootStF_succ f ends k)
 
 /-! ## The cells the loader pins -/
 

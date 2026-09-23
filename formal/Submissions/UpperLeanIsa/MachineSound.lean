@@ -5,7 +5,7 @@ import Mathlib.Tactic.Choose
 # Soundness of the leanISA machine under a fixed oracle table
 
 `CRel f v ci` is the relation the cell-level instruction `ci` asserts on the cell values `v`,
-with `BLAKE2S` answered by the table `f`. `accept_of_crel`: cell values that satisfy all `N`
+with `BLAKE2S` answered by the table `f`. `accept_of_rel`: cell values that satisfy all `N`
 relations, and agree with the loader on the pinned cells, certify a signature that the verifier
 accepts under `f`. The argument is per segment: the thermometer and the multiplexer read each
 chain's endpoint off the cells (`chain_sound_255`), the links pin the digits to the message and

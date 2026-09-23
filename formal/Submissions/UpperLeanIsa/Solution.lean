@@ -1,38 +1,33 @@
--- TEMPORARY CI warm-up: import every PR #23 module (no exports yet).
-import Submissions.UpperLeanIsa.Algorithms
-import Submissions.UpperLeanIsa.BasicProperties
-import Submissions.UpperLeanIsa.Cache
-import Submissions.UpperLeanIsa.Checksum
-import Submissions.UpperLeanIsa.Correctness
-import Submissions.UpperLeanIsa.Coupling
-import Submissions.UpperLeanIsa.Encoding
-import Submissions.UpperLeanIsa.Exposure
-import Submissions.UpperLeanIsa.ForgeryStructure
-import Submissions.UpperLeanIsa.HiddenBound
-import Submissions.UpperLeanIsa.HiddenCharges
-import Submissions.UpperLeanIsa.IUB
-import Submissions.UpperLeanIsa.Master
-import Submissions.UpperLeanIsa.QueryLayout
-import Submissions.UpperLeanIsa.RecordSemantics
-import Submissions.UpperLeanIsa.Records
-import Submissions.UpperLeanIsa.Replay
-import Submissions.UpperLeanIsa.Resampling
-import Submissions.UpperLeanIsa.Resources
-import Submissions.UpperLeanIsa.RootBinding
-import Submissions.UpperLeanIsa.SecondPreimages
-import Submissions.UpperLeanIsa.TargetBound
-import Submissions.UpperLeanIsa.Wire
-import Submissions.UpperLeanIsa.Stages
-import Submissions.UpperLeanIsa.Budget
-import Submissions.UpperLeanIsa.ConstraintMath
-import Submissions.UpperLeanIsa.CutTargets
-import Submissions.UpperLeanIsa.MachineProgram
-import Submissions.UpperLeanIsa.MachineRun
-import Submissions.UpperLeanIsa.Transcript
-import Submissions.UpperLeanIsa.Events
-import Submissions.UpperLeanIsa.StageB
-import Submissions.UpperLeanIsa.StageA
-import Submissions.UpperLeanIsa.KeygenBridge
 import Submissions.UpperLeanIsa.Security
-import Submissions.UpperLeanIsa.MachineProver
-import Submissions.UpperLeanIsa.MachineSound
+import Submissions.UpperLeanIsa.MachineFaithful
+
+/-! The leanISA baseline: the Winternitz scheme of `Algorithms.lean`, its straight-line bytecode
+(`MachineProgram.lean`) and the six certificate clauses. -/
+
+namespace OptimalOTS.Challenge.UpperLeanIsa
+
+open OptimalOTS OptimalOTS.LeanIsaBaseline
+
+/-- The OTS, the bytecode, the announced memory size, the prover's memory-filling strategy and
+the step count. -/
+noncomputable def submission : LeanIsa.Submission := Honest.machineSubmission
+
+/-- Admissibility and strong security of the OTS, well-formed bytecode, agreement of the honest
+prover's run with the verifier, soundness against every prover-chosen memory, and at most
+`170549` cycles on every completing execution. -/
+theorem certificate : submission.Certificate 170549 where
+  admissible := LeanIsaBaseline.admissible
+  secure := LeanIsaBaseline.secure
+  valid := Machine.valid
+  faithful := Honest.faithful
+  sound := Honest.sound submission rfl rfl
+  cycles := by
+    have h := Machine.cycles submission rfl
+    rwa [Machine.claim_eq] at h
+
+/-- The bytecode slots and memory cells the prover must seed and finalize, together fewer than
+`LeanIsa.maxSeededRows`. -/
+theorem seeded_rows : submission.seededRows < LeanIsa.maxSeededRows :=
+  Machine.seededRows_lt submission rfl rfl
+
+end OptimalOTS.Challenge.UpperLeanIsa
