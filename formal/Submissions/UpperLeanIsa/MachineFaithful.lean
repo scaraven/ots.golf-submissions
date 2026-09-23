@@ -1065,8 +1065,10 @@ theorem faithful : machineSubmission.Faithful := by
   rw [mem_support_bind_iff] at hmem
   obtain ⟨b, hb, hmem⟩ := hmem
   rw [mem_support_pure_iff] at hmem
-  rw [support_map] at hb
-  obtain ⟨o, ho, rfl⟩ := hb
+  rw [map_eq_bind_pure_comp, mem_support_bind_iff] at hb
+  obtain ⟨o, ho, hb⟩ := hb
+  rw [Function.comp_apply, mem_support_pure_iff] at hb
+  subst hb
   by_cases hacc : bits.length = 4352 ∧ rootValue f (reconstructedWords f m bits) = pk
   · subst hL
     rw [run_of_holds (κ := 17) (show (17 : ℕ) ≤ maxLogMem by decide) f _
