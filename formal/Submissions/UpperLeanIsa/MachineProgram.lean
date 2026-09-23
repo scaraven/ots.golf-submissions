@@ -269,24 +269,39 @@ end CInstr
 
 /-! ## The segments -/
 
-/-- Segment A: the constants, in the order documented in the module header. -/
-def constInstr (a : ℕ) : CInstr :=
-  if a = 0 then .setc zCell zeroV
-  else if a = 1 then .setc z2Cell zeroV
-  else if a = 2 then .setc oneCell oneV
-  else if a = 3 then .setc fpcCell fpcV
-  else if a < 38 then .setc (chainIdCell (a - 4)) (chainIdV (a - 4))
-  else if a < 72 then .setc (rootMdCell (a - 38)) (rootMdV (a - 38))
-  else if a < 327 then .setc (posCell (a - 72)) (posV (a - 72))
+/-- Segment A: cell and value of constant `a`, in the order documented in the module header.
+Only this pair is an if-chain; `constInstr a` is syntactically a `SET_CONSTANT`, so its opcode,
+cost and jump flag never need the chain to be evaluated. -/
+def constPair (a : ℕ) : ℕ × E :=
+  if a = 0 then (zCell, zeroV)
+  else if a = 1 then (z2Cell, zeroV)
+  else if a = 2 then (oneCell, oneV)
+  else if a = 3 then (fpcCell, fpcV)
+  else if a < 38 then (chainIdCell (a - 4), chainIdV (a - 4))
+  else if a < 72 then (rootMdCell (a - 38), rootMdV (a - 38))
+  else if a < 327 then (posCell (a - 72), posV (a - 72))
   else if a < 4407 then
-    .setc (wvCell ((a - 327) / 255) ((a - 327) % 255)) (wvV ((a - 327) / 255) ((a - 327) % 255))
-  else if a < 4662 then .setc (wuCell (a - 4407)) (wuV (a - 4407))
-  else if a < 4917 then .setc (wuHiCell (a - 4662)) (wuHiV (a - 4662))
-  else if a < 5172 then .setc (wuLoCell (a - 4917)) (wuLoV (a - 4917))
-  else if a = 5172 then .setc ubHiCell ubHiV
-  else if a = 5173 then .setc ubLoCell ubLoV
-  else if a < 5190 then .setc (vbCell (a - 5174)) (vbV (a - 5174))
-  else .setc lenCell lenV
+    (wvCell ((a - 327) / 255) ((a - 327) % 255), wvV ((a - 327) / 255) ((a - 327) % 255))
+  else if a < 4662 then (wuCell (a - 4407), wuV (a - 4407))
+  else if a < 4917 then (wuHiCell (a - 4662), wuHiV (a - 4662))
+  else if a < 5172 then (wuLoCell (a - 4917), wuLoV (a - 4917))
+  else if a = 5172 then (ubHiCell, ubHiV)
+  else if a = 5173 then (ubLoCell, ubLoV)
+  else if a < 5190 then (vbCell (a - 5174), vbV (a - 5174))
+  else (lenCell, lenV)
+
+/-- The cell of constant `a`. -/
+def constCell (a : ℕ) : ℕ := (constPair a).1
+
+/-- The value of constant `a`. -/
+def constVal (a : ℕ) : E := (constPair a).2
+
+/-- Segment A: constant `a` is `SET_CONSTANT [constCell a] ← constVal a`. -/
+def constInstr (a : ℕ) : CInstr := .setc (constCell a) (constVal a)
+
+theorem constInstr_of_pair {a c : ℕ} {v : E} (h : constPair a = (c, v)) :
+    constInstr a = .setc c v :=
+  congrArg (fun q : ℕ × E => CInstr.setc q.1 q.2) h
 
 /-- Segment B, step `j` of chain `i`, slot `r` (§2). -/
 def stepInstr (i j r : ℕ) : CInstr :=
@@ -535,41 +550,59 @@ theorem instrAt_end {i e : ℕ} (hi : i < 34) (he : e < 3) :
 
 /-! ### Segment A in detail -/
 
-theorem constInstr_zero : constInstr 0 = .setc zCell zeroV := rfl
-theorem constInstr_one : constInstr 1 = .setc z2Cell zeroV := rfl
-theorem constInstr_two : constInstr 2 = .setc oneCell oneV := rfl
-theorem constInstr_three : constInstr 3 = .setc fpcCell fpcV := rfl
+theorem constPair_zero : constPair 0 = (zCell, zeroV) := rfl
+theorem constPair_one : constPair 1 = (z2Cell, zeroV) := rfl
+theorem constPair_two : constPair 2 = (oneCell, oneV) := rfl
+theorem constPair_three : constPair 3 = (fpcCell, fpcV) := rfl
 
-theorem constInstr_chainId {i : ℕ} (hi : i < 34) :
-    constInstr (4 + i) = .setc (chainIdCell i) (chainIdV i) := by
+theorem constInstr_zero : constInstr 0 = .setc zCell zeroV := constInstr_of_pair constPair_zero
+theorem constInstr_one : constInstr 1 = .setc z2Cell zeroV := constInstr_of_pair constPair_one
+theorem constInstr_two : constInstr 2 = .setc oneCell oneV := constInstr_of_pair constPair_two
+theorem constInstr_three : constInstr 3 = .setc fpcCell fpcV :=
+  constInstr_of_pair constPair_three
+
+theorem constPair_chainId {i : ℕ} (hi : i < 34) :
+    constPair (4 + i) = (chainIdCell i, chainIdV i) := by
   have d : 4 + i - 4 = i := by omega
-  unfold constInstr
+  unfold constPair
   rw [if_neg (show ¬ (4 + i = 0) by omega), if_neg (show ¬ (4 + i = 1) by omega),
     if_neg (show ¬ (4 + i = 2) by omega), if_neg (show ¬ (4 + i = 3) by omega),
     if_pos (show 4 + i < 38 by omega), d]
 
-theorem constInstr_rootMd {r : ℕ} (hr : r < 34) :
-    constInstr (38 + r) = .setc (rootMdCell r) (rootMdV r) := by
+theorem constInstr_chainId {i : ℕ} (hi : i < 34) :
+    constInstr (4 + i) = .setc (chainIdCell i) (chainIdV i) :=
+  constInstr_of_pair (constPair_chainId hi)
+
+theorem constPair_rootMd {r : ℕ} (hr : r < 34) :
+    constPair (38 + r) = (rootMdCell r, rootMdV r) := by
   have d : 38 + r - 38 = r := by omega
-  unfold constInstr
+  unfold constPair
   rw [if_neg (show ¬ (38 + r = 0) by omega), if_neg (show ¬ (38 + r = 1) by omega),
     if_neg (show ¬ (38 + r = 2) by omega), if_neg (show ¬ (38 + r = 3) by omega),
     if_neg (show ¬ (38 + r < 38) by omega), if_pos (show 38 + r < 72 by omega), d]
 
-theorem constInstr_pos {j : ℕ} (hj : j < 255) :
-    constInstr (72 + j) = .setc (posCell j) (posV j) := by
+theorem constInstr_rootMd {r : ℕ} (hr : r < 34) :
+    constInstr (38 + r) = .setc (rootMdCell r) (rootMdV r) :=
+  constInstr_of_pair (constPair_rootMd hr)
+
+theorem constPair_pos {j : ℕ} (hj : j < 255) :
+    constPair (72 + j) = (posCell j, posV j) := by
   have d : 72 + j - 72 = j := by omega
-  unfold constInstr
+  unfold constPair
   rw [if_neg (show ¬ (72 + j = 0) by omega), if_neg (show ¬ (72 + j = 1) by omega),
     if_neg (show ¬ (72 + j = 2) by omega), if_neg (show ¬ (72 + j = 3) by omega),
     if_neg (show ¬ (72 + j < 38) by omega), if_neg (show ¬ (72 + j < 72) by omega),
     if_pos (show 72 + j < 327 by omega), d]
 
-theorem constInstr_wv {p j : ℕ} (hp : p < 16) (hj : j < 255) :
-    constInstr (327 + 255 * p + j) = .setc (wvCell p j) (wvV p j) := by
+theorem constInstr_pos {j : ℕ} (hj : j < 255) :
+    constInstr (72 + j) = .setc (posCell j) (posV j) :=
+  constInstr_of_pair (constPair_pos hj)
+
+theorem constPair_wv {p j : ℕ} (hp : p < 16) (hj : j < 255) :
+    constPair (327 + 255 * p + j) = (wvCell p j, wvV p j) := by
   have d1 : (327 + 255 * p + j - 327) / 255 = p := by omega
   have d2 : (327 + 255 * p + j - 327) % 255 = j := by omega
-  unfold constInstr
+  unfold constPair
   rw [if_neg (show ¬ (327 + 255 * p + j = 0) by omega),
     if_neg (show ¬ (327 + 255 * p + j = 1) by omega),
     if_neg (show ¬ (327 + 255 * p + j = 2) by omega),
@@ -579,30 +612,42 @@ theorem constInstr_wv {p j : ℕ} (hp : p < 16) (hj : j < 255) :
     if_neg (show ¬ (327 + 255 * p + j < 327) by omega),
     if_pos (show 327 + 255 * p + j < 4407 by omega), d1, d2]
 
-theorem constInstr_wu {j : ℕ} (hj : j < 255) :
-    constInstr (4407 + j) = .setc (wuCell j) (wuV j) := by
+theorem constInstr_wv {p j : ℕ} (hp : p < 16) (hj : j < 255) :
+    constInstr (327 + 255 * p + j) = .setc (wvCell p j) (wvV p j) :=
+  constInstr_of_pair (constPair_wv hp hj)
+
+theorem constPair_wu {j : ℕ} (hj : j < 255) :
+    constPair (4407 + j) = (wuCell j, wuV j) := by
   have d : 4407 + j - 4407 = j := by omega
-  unfold constInstr
+  unfold constPair
   rw [if_neg (show ¬ (4407 + j = 0) by omega), if_neg (show ¬ (4407 + j = 1) by omega),
     if_neg (show ¬ (4407 + j = 2) by omega), if_neg (show ¬ (4407 + j = 3) by omega),
     if_neg (show ¬ (4407 + j < 38) by omega), if_neg (show ¬ (4407 + j < 72) by omega),
     if_neg (show ¬ (4407 + j < 327) by omega), if_neg (show ¬ (4407 + j < 4407) by omega),
     if_pos (show 4407 + j < 4662 by omega), d]
 
-theorem constInstr_wuHi {j : ℕ} (hj : j < 255) :
-    constInstr (4662 + j) = .setc (wuHiCell j) (wuHiV j) := by
+theorem constInstr_wu {j : ℕ} (hj : j < 255) :
+    constInstr (4407 + j) = .setc (wuCell j) (wuV j) :=
+  constInstr_of_pair (constPair_wu hj)
+
+theorem constPair_wuHi {j : ℕ} (hj : j < 255) :
+    constPair (4662 + j) = (wuHiCell j, wuHiV j) := by
   have d : 4662 + j - 4662 = j := by omega
-  unfold constInstr
+  unfold constPair
   rw [if_neg (show ¬ (4662 + j = 0) by omega), if_neg (show ¬ (4662 + j = 1) by omega),
     if_neg (show ¬ (4662 + j = 2) by omega), if_neg (show ¬ (4662 + j = 3) by omega),
     if_neg (show ¬ (4662 + j < 38) by omega), if_neg (show ¬ (4662 + j < 72) by omega),
     if_neg (show ¬ (4662 + j < 327) by omega), if_neg (show ¬ (4662 + j < 4407) by omega),
     if_neg (show ¬ (4662 + j < 4662) by omega), if_pos (show 4662 + j < 4917 by omega), d]
 
-theorem constInstr_wuLo {j : ℕ} (hj : j < 255) :
-    constInstr (4917 + j) = .setc (wuLoCell j) (wuLoV j) := by
+theorem constInstr_wuHi {j : ℕ} (hj : j < 255) :
+    constInstr (4662 + j) = .setc (wuHiCell j) (wuHiV j) :=
+  constInstr_of_pair (constPair_wuHi hj)
+
+theorem constPair_wuLo {j : ℕ} (hj : j < 255) :
+    constPair (4917 + j) = (wuLoCell j, wuLoV j) := by
   have d : 4917 + j - 4917 = j := by omega
-  unfold constInstr
+  unfold constPair
   rw [if_neg (show ¬ (4917 + j = 0) by omega), if_neg (show ¬ (4917 + j = 1) by omega),
     if_neg (show ¬ (4917 + j = 2) by omega), if_neg (show ¬ (4917 + j = 3) by omega),
     if_neg (show ¬ (4917 + j < 38) by omega), if_neg (show ¬ (4917 + j < 72) by omega),
@@ -610,20 +655,14 @@ theorem constInstr_wuLo {j : ℕ} (hj : j < 255) :
     if_neg (show ¬ (4917 + j < 4662) by omega), if_neg (show ¬ (4917 + j < 4917) by omega),
     if_pos (show 4917 + j < 5172 by omega), d]
 
-theorem constInstr_ubHi : constInstr 5172 = .setc ubHiCell ubHiV := by
-  first
-    | rfl
-    | (unfold constInstr; norm_num)
+theorem constInstr_wuLo {j : ℕ} (hj : j < 255) :
+    constInstr (4917 + j) = .setc (wuLoCell j) (wuLoV j) :=
+  constInstr_of_pair (constPair_wuLo hj)
 
-theorem constInstr_ubLo : constInstr 5173 = .setc ubLoCell ubLoV := by
-  first
-    | rfl
-    | (unfold constInstr; norm_num)
-
-theorem constInstr_vb {p : ℕ} (hp : p < 16) :
-    constInstr (5174 + p) = .setc (vbCell p) (vbV p) := by
+theorem constPair_vb {p : ℕ} (hp : p < 16) :
+    constPair (5174 + p) = (vbCell p, vbV p) := by
   have d : 5174 + p - 5174 = p := by omega
-  unfold constInstr
+  unfold constPair
   rw [if_neg (show ¬ (5174 + p = 0) by omega), if_neg (show ¬ (5174 + p = 1) by omega),
     if_neg (show ¬ (5174 + p = 2) by omega), if_neg (show ¬ (5174 + p = 3) by omega),
     if_neg (show ¬ (5174 + p < 38) by omega), if_neg (show ¬ (5174 + p < 72) by omega),
@@ -632,10 +671,33 @@ theorem constInstr_vb {p : ℕ} (hp : p < 16) :
     if_neg (show ¬ (5174 + p < 5172) by omega), if_neg (show ¬ (5174 + p = 5172) by omega),
     if_neg (show ¬ (5174 + p = 5173) by omega), if_pos (show 5174 + p < 5190 by omega), d]
 
-theorem constInstr_len : constInstr 5190 = .setc lenCell lenV := by
+theorem constInstr_vb {p : ℕ} (hp : p < 16) :
+    constInstr (5174 + p) = .setc (vbCell p) (vbV p) :=
+  constInstr_of_pair (constPair_vb hp)
+
+theorem constPair_ubHi : constPair 5172 = (ubHiCell, ubHiV) := by
   first
     | rfl
-    | (unfold constInstr; norm_num)
+    | (unfold constPair; norm_num)
+
+theorem constInstr_ubHi : constInstr 5172 = .setc ubHiCell ubHiV :=
+  constInstr_of_pair constPair_ubHi
+
+theorem constPair_ubLo : constPair 5173 = (ubLoCell, ubLoV) := by
+  first
+    | rfl
+    | (unfold constPair; norm_num)
+
+theorem constInstr_ubLo : constInstr 5173 = .setc ubLoCell ubLoV :=
+  constInstr_of_pair constPair_ubLo
+
+theorem constPair_len : constPair 5190 = (lenCell, lenV) := by
+  first
+    | rfl
+    | (unfold constPair; norm_num)
+
+theorem constInstr_len : constInstr 5190 = .setc lenCell lenV :=
+  constInstr_of_pair constPair_len
 
 /-! ## Segment decomposition -/
 
@@ -752,13 +814,25 @@ theorem forall_lt_A_iff (P : ℕ → Prop) :
 
 section Uniform
 
-set_option maxHeartbeats 1000000 in
-theorem constInstr_bounded (a : ℕ) : (constInstr a).Bounded 131072 := by
-  unfold constInstr
-  split_ifs <;>
-    simp only [CInstr.Bounded, zCell, z2Cell, oneCell, fpcCell, chainIdCell, rootMdCell,
-      posCell, wvCell, wuCell, wuHiCell, wuLoCell, ubHiCell, ubLoCell, vbCell, lenCell] <;>
-    omega
+/-- Every Segment A cell is below `2 ^ 17`, group by group (the chain of `constPair` is never
+split). -/
+theorem constInstr_bounded : ∀ a < A_len, (constInstr a).Bounded 131072 := by
+  refine (forall_lt_A_iff _).mpr ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [constInstr_zero]; simp only [CInstr.Bounded, zCell]; omega
+  · rw [constInstr_one]; simp only [CInstr.Bounded, z2Cell]; omega
+  · rw [constInstr_two]; simp only [CInstr.Bounded, oneCell]; omega
+  · rw [constInstr_three]; simp only [CInstr.Bounded, fpcCell]; omega
+  · intro i hi; rw [constInstr_chainId hi]; simp only [CInstr.Bounded, chainIdCell]; omega
+  · intro r hr; rw [constInstr_rootMd hr]; simp only [CInstr.Bounded, rootMdCell]; omega
+  · intro j hj; rw [constInstr_pos hj]; simp only [CInstr.Bounded, posCell]; omega
+  · intro p hp j hj; rw [constInstr_wv hp hj]; simp only [CInstr.Bounded, wvCell]; omega
+  · intro j hj; rw [constInstr_wu hj]; simp only [CInstr.Bounded, wuCell]; omega
+  · intro j hj; rw [constInstr_wuHi hj]; simp only [CInstr.Bounded, wuHiCell]; omega
+  · intro j hj; rw [constInstr_wuLo hj]; simp only [CInstr.Bounded, wuLoCell]; omega
+  · rw [constInstr_ubHi]; simp only [CInstr.Bounded, ubHiCell]; omega
+  · rw [constInstr_ubLo]; simp only [CInstr.Bounded, ubLoCell]; omega
+  · intro p hp; rw [constInstr_vb hp]; simp only [CInstr.Bounded, vbCell]; omega
+  · rw [constInstr_len]; simp only [CInstr.Bounded, lenCell]; omega
 
 set_option maxHeartbeats 1000000 in
 theorem stepInstr_bounded {i j : ℕ} (hi : i < 34) (hj : j < 255) (r : ℕ) :
@@ -813,7 +887,7 @@ theorem cinstrAt_bounded17 : ∀ k < N, (cinstrAt k).Bounded 131072 := by
   refine (forall_lt_N_iff _).mpr ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro a ha
     rw [cinstrAt_const ha]
-    exact constInstr_bounded a
+    exact constInstr_bounded a ha
   · intro i hi j hj r hr
     rw [cinstrAt_step hi hj hr]
     exact stepInstr_bounded hi hj r
@@ -836,9 +910,7 @@ theorem cinstrAt_bounded17 : ∀ k < N, (cinstrAt k).Bounded 131072 := by
 theorem cinstrAt_bounded (k : ℕ) (hk : k < N) : (cinstrAt k).Bounded (2 ^ 64 - 1) :=
   CInstr.Bounded.mono (cinstrAt_bounded17 k hk) (by norm_num)
 
-theorem constInstr_isJump (a : ℕ) : (constInstr a).isJump = false := by
-  unfold constInstr
-  split_ifs <;> rfl
+theorem constInstr_isJump (a : ℕ) : (constInstr a).isJump = false := rfl
 
 theorem stepInstr_isJump (i j r : ℕ) : (stepInstr i j r).isJump = false := by
   unfold stepInstr
@@ -893,9 +965,7 @@ theorem cinstrAt_isJump (k : ℕ) (hk : k + 1 < N) : (cinstrAt k).isJump = false
 
 /-! ### Costs -/
 
-theorem constInstr_cost (a : ℕ) : (constInstr a).cost = 1 := by
-  unfold constInstr
-  split_ifs <;> rfl
+theorem constInstr_cost (a : ℕ) : (constInstr a).cost = 1 := rfl
 
 theorem stepInstr_cost (i j r : ℕ) : (stepInstr i j r).cost = if r = 5 then 10 else 1 := by
   unfold stepInstr

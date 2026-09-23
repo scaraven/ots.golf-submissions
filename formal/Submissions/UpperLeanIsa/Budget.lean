@@ -71,32 +71,6 @@ theorem costAtMost_liftM_bind {α β : Type} (pc : ProbComp α)
     have := ih u (h u) x hx
     simpa [queryCost] using this
 
-/-- Sampling the secret words is free. -/
-theorem costAtMost_tabulate_sample_bind {n m : ℕ} {β : Type}
-    (k : (Fin n → BitVec m) → OracleComp Spec β) {b : ℕ}
-    (h : CostAtMost (tabulate (fun _ : Fin n => sampleBits m) >>= k) b) :
-    ∀ v, CostAtMost (k v) b := by
-  induction n with
-  | zero =>
-    intro v
-    rw [tabulate, pure_bind] at h
-    have hv : v = Fin.elim0 := funext fun i => Fin.elim0 i
-    rw [hv]
-    exact h
-  | succ n ih =>
-    intro v
-    rw [tabulate, bind_assoc, sampleBits] at h
-    have h1 := costAtMost_liftM_bind _ _ h (v 0) (by simp)
-    rw [bind_assoc] at h1
-    simp only [pure_bind] at h1
-    have h2 : CostAtMost (k (Fin.cases (v 0) (fun i => v i.succ))) b :=
-      ih (fun xs => k (Fin.cases (v 0) xs)) h1 (fun i => v i.succ)
-    have hv : (Fin.cases (v 0) (fun i => v i.succ) : Fin (n + 1) → BitVec m) = v := by
-      funext i
-      exact Fin.cases rfl (fun _ => rfl) i
-    rw [hv] at h2
-    exact h2
-
 theorem chain_succ (i j n : ℕ) (x : Word) :
     chain i j (n + 1) x = chainStep i j x >>= chain i (j + 1) n := rfl
 
@@ -112,6 +86,34 @@ theorem costAtMost_tabulate_succ_bind {α β : Type} {n : ℕ}
       K (Fin.cases x xs)) b := by
   rw [tabulate_succ] at h
   simpa only [bind_assoc, pure_bind] using h
+
+/-- Sampling the secret words is free. -/
+theorem costAtMost_tabulate_sample_bind {n m : ℕ} {β : Type}
+    (k : (Fin n → BitVec m) → OracleComp Spec β) {b : ℕ}
+    (h : CostAtMost (tabulate (fun _ : Fin n => sampleBits m) >>= k) b) :
+    ∀ v, CostAtMost (k v) b := by
+  induction n with
+  | zero =>
+    intro v
+    rw [tabulate, pure_bind] at h
+    have hv : v = Fin.elim0 := funext fun i => Fin.elim0 i
+    rw [hv]
+    exact h
+  | succ n ih =>
+    intro v
+    have h0 : CostAtMost ((liftM ($ᵗ BitVec m) : OracleComp Spec (BitVec m)) >>= fun x =>
+        tabulate (fun _ : Fin n => sampleBits m) >>= fun xs => k (Fin.cases x xs)) b :=
+      costAtMost_tabulate_succ_bind (fun _ : Fin (n + 1) => sampleBits m) k h
+    have h1 : CostAtMost (tabulate (fun _ : Fin n => sampleBits m) >>= fun xs =>
+        k (Fin.cases (v 0) xs)) b :=
+      costAtMost_liftM_bind ($ᵗ BitVec m) _ h0 (v 0) (by simp)
+    have h2' := ih _ h1 (fun i => v i.succ)
+    have h2 : CostAtMost (k (Fin.cases (v 0) (fun i => v i.succ))) b := h2'
+    have hv : (Fin.cases (v 0) (fun i => v i.succ) : Fin (n + 1) → BitVec m) = v := by
+      funext i
+      exact Fin.cases rfl (fun _ => rfl) i
+    rw [hv] at h2
+    exact h2
 
 /-- A nonempty chain walk costs at least one tagged query, i.e. two compressions. -/
 theorem two_le_of_costAtMost_chain_bind {β : Type} (i j n : ℕ) (x : Word)
