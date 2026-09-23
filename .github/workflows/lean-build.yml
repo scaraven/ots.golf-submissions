@@ -1,0 +1,374 @@
+# Private CI for ots.golf submission roots (fork only; never part of a proof PR).
+#
+# Builds one submission root against the contract pinned by the `.contract` submodule of the
+# pushed commit, the way `lake build` sees it inside the hosted verifier:
+#   warm .lake (Mathlib cache + contract build) -> policy check -> build the Solution module
+#   -> stub-statement check + `#print axioms` -> optional pinned comparator run.
+#
+# Trigger: push a branch `wip/<name>` (or `ci/<name>`) that contains this workflow, or run it
+# manually (Actions tab -> lean-build -> Run workflow) to pick another track / source folder.
+# By default the root is the track's submission_root (formal/Submissions/UpperRiscv); the claim
+# is read from its claim.txt.
+name: lean-build
+
+on:
+  push:
+    branches: ['ci/**', 'wip/**']
+  workflow_dispatch:
+    inputs:
+      track:
+        description: Track slug from .contract/challenges.json
+        type: choice
+        options: [upper-riscv, upper-compressions, upper-leanisa, lower-generality-1]
+        default: upper-riscv
+      source_root:
+        description: Folder of this repo holding the candidate root (empty = the track's submission_root)
+        type: string
+        default: ''
+      comparator:
+        description: Also run the pinned comparator (exact statement comparison + kernel replay)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: lean-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        shell: bash
+    env:
+      TRACK: ${{ inputs.track || 'upper-riscv' }}
+      SOURCE_ROOT: ${{ inputs.source_root || '' }}
+      RUN_COMPARATOR: ${{ github.event_name != 'workflow_dispatch' || inputs.comparator }}
+      GH_TOKEN: ${{ github.token }}
+      # The whole warm .lake (packages, Mathlib oleans, contract build). actions/cache cannot
+      # exclude a subdirectory of a cached directory, so the per-branch cache holds everything.
+      LAKE_CACHE_PATHS: .contract/formal/.lake
+    steps:
+      - name: Checkout (with the pinned .contract submodule)
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+          fetch-depth: 1
+
+      - name: Resolve track parameters
+        id: p
+        run: |
+          python3 .github/ci/params.py | tee -a "$GITHUB_OUTPUT"
+          pin="$(git ls-tree HEAD .contract | awk '{print $3}')"
+          head="$(git -C .contract rev-parse HEAD)"
+          echo "contract pin: $pin, checked out: $head"
+          [ "$pin" = "$head" ] || { echo "::error::.contract checkout differs from the pinned commit"; exit 1; }
+          {
+            echo "# lean-build: \`${TRACK}\`"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| commit | \`${GITHUB_SHA}\` (\`${GITHUB_REF_NAME}\`) |"
+            echo "| contract pin | \`${pin}\` |"
+            echo "| toolchain | \`$(cat .contract/formal/lean-toolchain)\` |"
+            echo "| source root | \`$(grep '^source_root=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)\` |"
+            echo "| claim.txt | \`$(grep '^claim=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)\` |"
+            echo "| warm .lake key | \`$(grep '^lake_key=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)\` |"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Free disk space and add swap
+        run: |
+          echo "::group::before"; nproc; free -m; swapon --show || true; df -h; echo "::endgroup::"
+          [ -x /usr/bin/time ] || { sudo apt-get update -q && sudo apt-get install -y -q time; }
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/share/swift /usr/local/share/powershell || true
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile /swapfile || true
+          target=/mnt
+          if [ ! -d /mnt ] || [ "$(df --output=avail -BG /mnt | tail -1 | tr -dc 0-9)" -lt 24 ]; then target=; fi
+          swapfile="${target}/ci-swapfile"
+          sudo fallocate -l 16G "$swapfile"
+          sudo chmod 600 "$swapfile"
+          sudo mkswap "$swapfile" >/dev/null
+          sudo swapon "$swapfile"
+          echo "::group::after"; free -m; swapon --show; df -h; echo "::endgroup::"
+
+      - name: Install elan and the pinned toolchain
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o "$RUNNER_TEMP/elan-init.sh"
+          sh "$RUNNER_TEMP/elan-init.sh" -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.elan/bin:$PATH"
+          elan toolchain install "$(cat .contract/formal/lean-toolchain)"
+          cd .contract/formal && lean --version && lake --version
+
+      - name: Restore warm .lake (actions/cache)
+        id: lake-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.LAKE_CACHE_PATHS }}
+          key: ${{ steps.p.outputs.lake_key }}
+          restore-keys: ${{ steps.p.outputs.lake_key_prefix }}
+
+      # Branch caches are invisible to other branches (except the default branch, which this
+      # workflow never runs on), so a cold branch pulls the warm .lake from an artifact instead
+      # (packed without Mathlib's oleans; `lake exe cache get` below restores those).
+      - name: Restore warm .lake (artifact from any branch)
+        id: warm
+        if: steps.lake-cache.outputs.cache-hit != 'true'
+        run: |
+          name="warm-${{ steps.p.outputs.lake_key }}"
+          run_id="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts" -f name="$name" -f per_page=30 \
+            --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .workflow_run.id // empty' || true)"
+          if [ -z "$run_id" ]; then echo "no artifact $name"; exit 0; fi
+          echo "downloading $name from run $run_id"
+          gh run download "$run_id" -R "$GITHUB_REPOSITORY" -n "$name" -D "$RUNNER_TEMP/warm"
+          rm -rf .contract/formal/.lake
+          zstd -d -T0 --stdout "$RUNNER_TEMP/warm/warm-lake.tar.zst" | tar -x -C .contract/formal
+          rm -rf "$RUNNER_TEMP/warm"
+          echo "restored=true" >> "$GITHUB_OUTPUT"
+
+      - name: Mathlib cache and contract build (lake exe cache get; lake build OptimalOTS)
+        id: deps
+        working-directory: .contract/formal
+        run: |
+          # No submission root and no stale build products of one may be part of the warm tree.
+          rm -rf Submissions .lake/build/lib/lean/Submissions .lake/build/ir/Submissions
+          t0=$(date +%s)
+          lake exe cache get 2>&1 | tail -n 40
+          t1=$(date +%s)
+          rm -rf "$HOME/.cache/mathlib"
+          /usr/bin/time -v lake build OptimalOTS 2>&1 | tee "$GITHUB_WORKSPACE/deps.log"
+          t2=$(date +%s)
+          echo "cache_get_s=$((t1 - t0))" >> "$GITHUB_OUTPUT"
+          echo "contract_s=$((t2 - t1))" >> "$GITHUB_OUTPUT"
+          echo "::group::.lake sizes"
+          for d in .lake/build .lake/packages/*; do du -sh "$d"; done | sort -h
+          du -sh .lake; df -h .
+          echo "::endgroup::"
+          {
+            echo "## Warm .lake"
+            echo "- actions/cache: hit=\`${{ steps.lake-cache.outputs.cache-hit }}\` matched=\`${{ steps.lake-cache.outputs.cache-matched-key }}\`; artifact restored=\`${{ steps.warm.outputs.restored }}\`"
+            echo "- \`lake exe cache get\`: $((t1 - t0)) s; \`lake build OptimalOTS\`: $((t2 - t1)) s"
+            total_m=$(du -sm .lake | cut -f1); mathlib_m=$(du -sm .lake/packages/mathlib/.lake/build | cut -f1)
+            echo "- size on disk: ${total_m} MiB, of which Mathlib oleans ${mathlib_m} MiB"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save warm .lake (actions/cache)
+        if: steps.lake-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.LAKE_CACHE_PATHS }}
+          key: ${{ steps.p.outputs.lake_key }}
+
+      - name: Pack warm .lake for other branches
+        id: pack
+        if: steps.lake-cache.outputs.cache-hit != 'true' && steps.warm.outputs.restored != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/warm-up"
+          tar -C .contract/formal --exclude=.lake/packages/mathlib/.lake/build -cf - .lake \
+            | zstd -T0 -3 -q -o "$RUNNER_TEMP/warm-up/warm-lake.tar.zst"
+          ls -la "$RUNNER_TEMP/warm-up"
+
+      - name: Upload warm .lake artifact
+        if: steps.pack.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: warm-${{ steps.p.outputs.lake_key }}
+          path: ${{ runner.temp }}/warm-up/warm-lake.tar.zst
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Stage the submission root into the contract tree
+        run: |
+          rm -rf "$RUNNER_TEMP/warm-up"
+          dest=".contract/${{ steps.p.outputs.submission_root }}"
+          rm -rf .contract/formal/Submissions
+          mkdir -p "$(dirname "$dest")"
+          cp -a "${{ steps.p.outputs.source_root }}" "$dest"
+          n=$(find "$dest" -mindepth 1 | wc -l)
+          echo "staged ${{ steps.p.outputs.source_root }} -> $dest: $n entries, claim.txt=$(cat "$dest/claim.txt" 2>/dev/null || echo missing)"
+
+      - name: Policy check (pin_contract.py, check_submission.py)
+        id: policy
+        continue-on-error: true
+        run: |
+          rc=0
+          python3 .contract/verifier/pin_contract.py check --root .contract || rc=$?
+          python3 .contract/verifier/check_submission.py "$TRACK" --root .contract --json > policy.json || rc=$?
+          cat policy.json
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r = json.load(open("policy.json"))
+          print("## Policy (check_submission.py)\n")
+          print(f"- ok: **{r.get('ok')}**, claim: `{r.get('claim')}`, files: {len(r.get('files', []))}, bytes: {r.get('total_bytes')}")
+          for e in r.get("errors", []):
+              print(f"- error: {e}")
+          print()
+          PY
+          exit $rc
+
+      - name: Build ${{ steps.p.outputs.solution_module }}
+        id: build
+        timeout-minutes: 240
+        working-directory: .contract/formal
+        run: |
+          ( while sleep 30; do echo "$(date -u +%T) $(free -m | awk 'NR==2{printf "mem_used=%s ", $3} NR==3{printf "swap_used=%s", $3}')"; done ) \
+            > "$GITHUB_WORKSPACE/mem.log" 2>&1 &
+          sampler=$!
+          t0=$(date +%s)
+          rc=0
+          /usr/bin/time -v lake build "${{ steps.p.outputs.solution_module }}" 2>&1 | tee "$GITHUB_WORKSPACE/build.log" || rc=$?
+          kill "$sampler" || true
+          echo "seconds=$(( $(date +%s) - t0 ))" >> "$GITHUB_OUTPUT"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit $rc
+
+      - name: Summarize build log
+        if: always() && steps.build.outcome != 'skipped'
+        run: |
+          python3 .github/ci/summarize_log.py build.log \
+            "Build \`${{ steps.p.outputs.solution_module }}\`" \
+            --outcome "${{ steps.build.outcome }} (exit ${{ steps.build.outputs.rc }})" \
+            --seconds "${{ steps.build.outputs.seconds }}" --mem mem.log
+
+      - name: Stub statements and axioms
+        id: axioms
+        if: steps.build.outcome == 'success'
+        run: |
+          python3 .github/ci/axiom_check.py gen "$TRACK" "${{ steps.p.outputs.claim }}" "$RUNNER_TEMP/CiCheck.lean"
+          cp "$RUNNER_TEMP/CiCheck.lean" CiCheck.lean
+          rc=0
+          (cd .contract/formal && lake env lean "$RUNNER_TEMP/CiCheck.lean") > axioms.log 2>&1 || rc=$?
+          cat axioms.log
+          if [ "$rc" -ne 0 ]; then
+            python3 .github/ci/summarize_log.py axioms.log "Stub statement check FAILED (lean exit $rc)"
+          fi
+          python3 .github/ci/axiom_check.py check "$TRACK" axioms.log || rc=1
+          exit $rc
+
+      - name: Restore comparator tools
+        id: tools-cache
+        if: env.RUN_COMPARATOR == 'true' && steps.axioms.outcome == 'success'
+        uses: actions/cache/restore@v6
+        with:
+          path: .contract/verifier/.tools
+          key: comparator-tools-v1-${{ runner.os }}-${{ hashFiles('.contract/verifier/setup_tools.sh', '.contract/formal/lean-toolchain') }}
+
+      - name: Set up Go (for landrun)
+        if: steps.tools-cache.outcome == 'success' && steps.tools-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: Build comparator, lean4export and landrun (setup_tools.sh)
+        id: tools
+        if: steps.tools-cache.outcome == 'success'
+        continue-on-error: true
+        run: |
+          if [ -f .contract/verifier/.tools/env.sh ]; then cat .contract/verifier/.tools/env.sh; exit 0; fi
+          rc=0
+          .contract/verifier/setup_tools.sh > tools.log 2>&1 || rc=$?
+          tail -n 60 tools.log
+          if [ "$rc" -ne 0 ]; then
+            c="$PWD/.contract/verifier/.tools/comparator"
+            if [ -x "$c/.lake/build/bin/comparator" ] && [ -x "$c/.lake/packages/lean4export/.lake/build/bin/lean4export" ]; then
+              echo "::warning::setup_tools.sh failed (exit $rc); falling back to comparator's fake-landrun shim (no sandbox)"
+              chmod +x "$c/scripts/fake-landrun.sh"
+              {
+                echo "export COMPARATOR_BIN=\"$c/.lake/build/bin/comparator\""
+                echo "export COMPARATOR_LEAN4EXPORT=\"$c/.lake/packages/lean4export/.lake/build/bin/lean4export\""
+                echo "export COMPARATOR_LANDRUN=\"$c/scripts/fake-landrun.sh\""
+              } > .contract/verifier/.tools/env.sh
+            else
+              exit $rc
+            fi
+          fi
+          cat .contract/verifier/.tools/env.sh
+
+      - name: Save comparator tools
+        if: steps.tools.outcome == 'success' && steps.tools-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .contract/verifier/.tools
+          key: comparator-tools-v1-${{ runner.os }}-${{ hashFiles('.contract/verifier/setup_tools.sh', '.contract/formal/lean-toolchain') }}
+
+      - name: Comparator (rendered stub vs solution, kernel replay)
+        id: comparator
+        if: steps.tools.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 120
+        working-directory: .contract/formal
+        run: |
+          source ../verifier/.tools/env.sh
+          python3 ../verifier/render_challenge.py "$TRACK" --root ..
+          t0=$(date +%s)
+          rc=0
+          env -i PATH="$HOME/.elan/bin:/usr/local/bin:/usr/bin:/bin" HOME="$HOME" LANG=C.UTF-8 \
+            COMPARATOR_LANDRUN="$COMPARATOR_LANDRUN" COMPARATOR_LEAN4EXPORT="$COMPARATOR_LEAN4EXPORT" \
+            /usr/bin/time -v lake env "$COMPARATOR_BIN" "../${{ steps.p.outputs.comparator_config }}" \
+            > "$GITHUB_WORKSPACE/comparator.log" 2>&1 || rc=$?
+          secs=$(( $(date +%s) - t0 ))
+          verdict=rejected
+          if [ "$rc" -eq 0 ] && grep -q "Your solution is okay!" "$GITHUB_WORKSPACE/comparator.log"; then verdict=okay; fi
+          python3 "$GITHUB_WORKSPACE/.github/ci/summarize_log.py" "$GITHUB_WORKSPACE/comparator.log" \
+            "Comparator: $verdict (landrun: $(basename "$COMPARATOR_LANDRUN"))" --outcome "exit $rc" --seconds "$secs"
+          [ "$verdict" = okay ]
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-logs
+          path: |
+            build.log
+            deps.log
+            mem.log
+            policy.json
+            CiCheck.lean
+            axioms.log
+            tools.log
+            comparator.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Verdict
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          DEPS: ${{ steps.deps.outcome }}
+          POLICY: ${{ steps.policy.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          AXIOMS: ${{ steps.axioms.outcome }}
+          TOOLS: ${{ steps.tools.outcome }}
+          COMPARATOR: ${{ steps.comparator.outcome }}
+        run: |
+          {
+            echo "## Verdict"
+            echo
+            echo "| step | outcome |"
+            echo "|---|---|"
+            echo "| contract build | ${DEPS:-skipped} |"
+            echo "| policy | ${POLICY:-skipped} |"
+            echo "| solution build | ${BUILD:-skipped} |"
+            echo "| stub statements + axioms | ${AXIOMS:-skipped} |"
+            echo "| comparator tools | ${TOOLS:-skipped} |"
+            echo "| comparator | ${COMPARATOR:-skipped} |"
+            echo "| all other steps | ${JOB_STATUS} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          fail=0
+          [ "$JOB_STATUS" = success ] || fail=1
+          for v in "$DEPS" "$POLICY" "$BUILD" "$AXIOMS" "$COMPARATOR"; do
+            [ "$v" = failure ] && fail=1
+          done
+          if [ "$TOOLS" = failure ]; then echo "::warning::comparator tools could not be built; comparator was not run"; fi
+          exit $fail
