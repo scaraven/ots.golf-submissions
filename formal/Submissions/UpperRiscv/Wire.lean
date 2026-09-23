@@ -28,8 +28,8 @@ theorem decode_encode (σ : Signature) :
 
 theorem encode_decode (bits : List Bool) (hlen : 128 ≤ bits.length) :
     AlgorithmAdapter.encodeSignature (decode bits) = bits := by
-  change toBits (ofBits 128 (bits.take 128)) ++ Payload.permute (Payload.permute (bits.drop 128)) = bits
-  rw [Payload.permute_permute, toBits_ofBits _ (by simp [hlen]), List.take_append_drop]
+  change toBits (ofBits 128 (bits.take 128)) ++ Payload.unpermute (Payload.permute (bits.drop 128)) = bits
+  rw [Payload.unpermute_permute, toBits_ofBits _ (by simp [hlen]), List.take_append_drop]
 
 theorem reveal_positive (i : Idx) :
     0 < Forest.forestScheme.graph.revealBits (Forest.forestScheme.sets i) := by

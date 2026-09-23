@@ -42,14 +42,14 @@ theorem lengthSetup_effect (s : MachineState) (q : Fin 16)
     exact ⟨h.trans (congrArg W hw), fun _ _ => rfl, rfl, rfl⟩
 
 theorem pairCost_eq (q : Fin 16) : pairCost index q =
-    (lengthSetup q).length+6+2*earlyHash (leftChain q) +
+    (lengthSetup q).length+6+earlyHash (leftChain q)+earlyHash (rightChain q) +
       (32-RiscvUpperForest.ForestVerifier.pos index (leftChain q)) +
       (32-RiscvUpperForest.ForestVerifier.pos index (rightChain q)) := by
   have ha := pos_le index (leftChain q)
   have hb := pos_le index (rightChain q)
   have ba := earlyHash_cases (leftChain q)
+  have bb := earlyHash_cases (rightChain q)
   unfold pairCost remaining
-  rw [early_pair]
   omega
 
 /-- One pair runs its two graph chains and reaches the next block with all invariants restored. -/

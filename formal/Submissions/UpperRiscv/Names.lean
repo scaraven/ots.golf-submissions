@@ -7,7 +7,9 @@ import Submissions.UpperRiscv.Semantics
 There are 32 chains of 32 hash steps. The first eight chains carry 192-bit states;
 the remaining 24 carry 160-bit states. Chains are indexed in execution order:
 physical slots 0–7 forwards, then 31–8 backwards. Every hash returns 256 bits;
-the next state is the slice starting at bit 64. A source is already state-width.
+the next state is the slice starting at bit `truncOff k`: bit 64 for every chain except
+chain 12, which is hashed in place at the top edge of the wire and keeps the slice starting at
+bit 32. A source is already state-width.
 
 The root commits to 30 slices of 192 bits and two complete 256-bit boundary tops,
 for 6272 bits. Its physical-memory order is encoded by `rootCat`. The three
@@ -37,6 +39,18 @@ theorem chainBits_ge (k : Fin 32) : 160 ≤ chainBits k := by
 
 theorem chainBits_le (k : Fin 32) : chainBits k ≤ 192 := by
   rcases chainBits_cases k with h | h <;> omega
+
+/-- Bit offset of a chain's next state inside a 256-bit answer: the answer is written eight
+bytes below the state, except for chain 12, whose answer starts four bytes below it. -/
+def truncOff (k : Fin 32) : ℕ := if k.val = 12 then 32 else 64
+
+theorem truncOff_add_le (k : Fin 32) : truncOff k + chainBits k ≤ 256 := by
+  unfold truncOff chainBits
+  split_ifs <;> omega
+
+theorem truncOff_mod8 (k : Fin 32) : truncOff k % 8 = 0 := by
+  unfold truncOff
+  split_ifs <;> decide
 
 /-- Node names. -/
 inductive Name where
@@ -231,10 +245,10 @@ def lenF (v : Fin N) : ℕ := (ofFin v).len
 theorem lenF_fin (n : Name) : lenF n.fin = n.len := by
   rw [lenF, ofFin_fin]
 
-/-- Retain the state slice starting eight bytes into a hash output, or the entire
+/-- Retain the state slice starting `truncOff k` bits into a hash output, or the entire
 state when the input already has the chain's width. -/
 def trunc (k : Fin 32) {w : ℕ} (x : BitVec w) : BitVec (chainBits k) :=
-  x.extractLsb' (min 64 (w - chainBits k)) (chainBits k)
+  x.extractLsb' (min (truncOff k) (w - chainBits k)) (chainBits k)
 
 abbrev Asg := (v : Fin N) → BitVec (lenF v)
 
