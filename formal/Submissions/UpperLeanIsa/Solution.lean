@@ -1,0 +1,24 @@
+-- TEMPORARY CI warm-up: import every PR #23 module (no exports yet).
+import Submissions.UpperLeanIsa.Algorithms
+import Submissions.UpperLeanIsa.BasicProperties
+import Submissions.UpperLeanIsa.Cache
+import Submissions.UpperLeanIsa.Checksum
+import Submissions.UpperLeanIsa.Correctness
+import Submissions.UpperLeanIsa.Coupling
+import Submissions.UpperLeanIsa.Encoding
+import Submissions.UpperLeanIsa.Exposure
+import Submissions.UpperLeanIsa.ForgeryStructure
+import Submissions.UpperLeanIsa.HiddenBound
+import Submissions.UpperLeanIsa.HiddenCharges
+import Submissions.UpperLeanIsa.IUB
+import Submissions.UpperLeanIsa.Master
+import Submissions.UpperLeanIsa.QueryLayout
+import Submissions.UpperLeanIsa.RecordSemantics
+import Submissions.UpperLeanIsa.Records
+import Submissions.UpperLeanIsa.Replay
+import Submissions.UpperLeanIsa.Resampling
+import Submissions.UpperLeanIsa.Resources
+import Submissions.UpperLeanIsa.RootBinding
+import Submissions.UpperLeanIsa.SecondPreimages
+import Submissions.UpperLeanIsa.TargetBound
+import Submissions.UpperLeanIsa.Wire
