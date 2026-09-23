@@ -34,7 +34,7 @@ namespace OptimalOTS.LeanIsaBaseline
 attribute [local irreducible] hashBits publicFiber finiteFiber hiddenCache
 attribute [local irreducible] queryLocation Record.query
 
-local instance : DecidableEq Record := Classical.decEq Record
+local instance instDecEqRecordStageA : DecidableEq Record := Classical.decEq Record
 
 variable (A : OracleAlgorithm.Adversary)
 

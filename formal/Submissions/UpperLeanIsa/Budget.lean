@@ -21,7 +21,7 @@ namespace OptimalOTS.LeanIsaBaseline
 attribute [local irreducible] hashBits pkBits msgBits securityBits maxSignatureBits
 attribute [local irreducible] keygenBudget signBudget verifyBudget
 
-local instance : DecidableEq Record := Classical.decEq Record
+local instance instDecEqRecordBudget : DecidableEq Record := Classical.decEq Record
 
 variable (A : OracleAlgorithm.Adversary)
 

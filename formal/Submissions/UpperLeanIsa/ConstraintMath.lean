@@ -358,15 +358,23 @@ theorem rootValueFold_ofFn (f : HashTable) (n : ℕ) : ∀ (w : ℕ → Word) (c
       exact h)
     -- `hrest : rootValueFold f (List.ofFn fun i => w (↑i + 1)) (c 1) = c (n + 1)`
     simp only [Nat.zero_add] at hrest
+    -- The list length sits inside the query index, and the answer's type depends on the query,
+    -- so it cannot be rewritten under `f`. Generalise it instead (`subst`, not `rw`).
+    have e0' : ∀ L : ℕ, L = n →
+        (f ⟨896, hashInput (c 0) ((w 0).setWidth 512) (BitVec.ofNat 128 (2 + L))⟩ :
+          BitVec 256) = c 1 := by
+      intro L hL
+      subst hL
+      exact e0
+    have key : (f ⟨896, hashInput (c 0) ((w 0).setWidth 512)
+        (BitVec.ofNat 128 (2 + (List.ofFn fun i : Fin n => w ((i : ℕ) + 1)).length))⟩ :
+          BitVec 256) = c 1 :=
+      e0' _ List.length_ofFn
     rw [List.ofFn_succ]
-    -- Normalise the goal to exactly `hrest`'s left side with rewrites only: closing by `exact`
-    -- up to defeq would unfold `hashInput`/`toBits` (the CI max-recursion failure).
-    first
-    | (simp only [rootValueFold, List.length_ofFn, Fin.val_zero, Fin.val_succ, e0]
-       rw [hrest])
-    | (simp only [rootValueFold, List.length_ofFn]
-       simp only [Fin.val_zero, Fin.val_succ, Fin.succ, e0]
-       rw [hrest])
+    -- `Fin.val_zero` / `Fin.val_succ` are `rfl` lemmas, so `simp` applies them under `f`.
+    simp only [rootValueFold, Fin.val_zero, Fin.val_succ]
+    exact (congrArg (rootValueFold f (List.ofFn fun i : Fin n => w ((i : ℕ) + 1))) key).trans
+      hrest
 
 /-- Soundness of the root. States `(lo k, hi k)` start at zero; absorb `k` hashes endpoint
 `e k` with metadata `2 + (33 - k)`; then `lo 34` holds `rootValue f xs`. -/
