@@ -484,7 +484,7 @@ theorem accept_of_rel (f : HashTable) (pk : PublicKey) (m : Message) (bits : Lis
       have hl : linkChain 0 (31 - i) = i := by
         unfold linkChain
         omega
-      rw [digit_cell1 m ⟨i, by omega⟩ h16 hi]
+      rw [digit_cell1 m ⟨i, by omega⟩ (show 16 ≤ i from h16) (show i < 32 from hi)]
       rw [hl] at hbyte
       exact hbyte
     · -- message cell 2, in-cell byte 15 - i
@@ -499,7 +499,7 @@ theorem accept_of_rel (f : HashTable) (pk : PublicKey) (m : Message) (bits : Lis
       have hl : linkChain 1 (15 - i) = i := by
         unfold linkChain
         omega
-      rw [digit_cell2 m ⟨i, by omega⟩ (by omega)]
+      rw [digit_cell2 m ⟨i, by omega⟩ (show i < 16 by omega)]
       rw [hl] at hbyte
       exact hbyte
   -- the checksum digits
@@ -542,7 +542,8 @@ theorem accept_of_rel (f : HashTable) (pk : PublicKey) (m : Message) (bits : Lis
       · have e : i = ⟨32, by norm_num⟩ := Fin.ext h32
         rw [e]
         exact hck.1
-      · have e : i = ⟨33, by norm_num⟩ := Fin.ext (by have := i.isLt; omega)
+      · have hi33 : i.val = 33 := by have := i.isLt; omega
+        have e : i = ⟨33, by norm_num⟩ := Fin.ext hi33
         rw [e]
         exact hck.2
   -- the endpoints

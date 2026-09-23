@@ -55,7 +55,7 @@ theorem rel_of_crel (f : HashTable) {κ : ℕ} (L : MemImage κ) {ci : CInstr}
   | setc a k => exact ⟨hb, h⟩
   | blake m0 m1 m2 m3 cv out md =>
     obtain ⟨b0, b1, b2, b3, b4, b5, b6⟩ := hb
-    exact ⟨⟨b0, b1, b2, b3, by omega, b4, by omega, b5, b6⟩, h⟩
+    exact ⟨⟨b0, b1, b2, b3, Nat.lt_of_succ_lt b4, b4, Nat.lt_of_succ_lt b5, b5, b6⟩, h⟩
   | jump a b c =>
     obtain ⟨ha, hb', hc⟩ := hb
     exact ⟨ha, hb', hc, h⟩
@@ -82,8 +82,8 @@ theorem crel_congr (f : HashTable) {v w : ℕ → E} {B : ℕ} {ci : CInstr} (hb
     obtain ⟨b0, b1, b2, b3, b4, b5, b6⟩ := hb
     show OracleCompressCells ![w m0, w m1, w m2, w m3] (w cv) (w (cv + 1)) (w out) (w (out + 1))
       (w md) (f ⟨896, blake2sQuery ![w m0, w m1, w m2, w m3] (w cv) (w (cv + 1)) (w md)⟩)
-    rw [← hvw m0 b0, ← hvw m1 b1, ← hvw m2 b2, ← hvw m3 b3, ← hvw cv (by omega),
-      ← hvw (cv + 1) b4, ← hvw out (by omega), ← hvw (out + 1) b5, ← hvw md b6]
+    rw [← hvw m0 b0, ← hvw m1 b1, ← hvw m2 b2, ← hvw m3 b3, ← hvw cv (Nat.lt_of_succ_lt b4),
+      ← hvw (cv + 1) b4, ← hvw out (Nat.lt_of_succ_lt b5), ← hvw (out + 1) b5, ← hvw md b6]
     exact h
   | jump a b c =>
     obtain ⟨ha, hb', hc⟩ := hb
@@ -572,8 +572,8 @@ theorem linkAccV_lo (m : Message) : linkAccV m 0 15 = cellOfBits (m.extractLsb' 
     have h1 : dig m (linkChain 0 b) = digit m ⟨linkChain 0 b, hc⟩ := dig_fin m ⟨_, hc⟩
     have h2 : digit m ⟨linkChain 0 b, hc⟩ =
         (m.extractLsb' 0 128).toNat / 256 ^ (31 - linkChain 0 b) % 256 :=
-      digit_cell1 m ⟨linkChain 0 b, hc⟩ (by unfold linkChain; omega)
-        (by unfold linkChain; omega)
+      digit_cell1 m ⟨linkChain 0 b, hc⟩ (show 16 ≤ linkChain 0 b by unfold linkChain; omega)
+        (show linkChain 0 b < 32 by unfold linkChain; omega)
     have h3 : 31 - linkChain 0 b = b := by unfold linkChain; omega
     rw [dVal_link m (by norm_num) hb', h1, h2, h3]
   rw [hsum, Finset.sum_congr rfl hterm, pack_sum_of_bytes]
@@ -589,7 +589,7 @@ theorem linkAccV_hi (m : Message) : linkAccV m 1 15 = cellOfBits (m.extractLsb' 
     have h1 : dig m (linkChain 1 b) = digit m ⟨linkChain 1 b, hc⟩ := dig_fin m ⟨_, hc⟩
     have h2 : digit m ⟨linkChain 1 b, hc⟩ =
         (m.extractLsb' 128 128).toNat / 256 ^ (15 - linkChain 1 b) % 256 :=
-      digit_cell2 m ⟨linkChain 1 b, hc⟩ (by unfold linkChain; omega)
+      digit_cell2 m ⟨linkChain 1 b, hc⟩ (show linkChain 1 b < 16 by unfold linkChain; omega)
     have h3 : 15 - linkChain 1 b = b := by unfold linkChain; omega
     rw [dVal_link m (by norm_num) hb', h1, h2, h3]
   rw [hsum, Finset.sum_congr rfl hterm, pack_sum_of_bytes]
