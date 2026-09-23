@@ -29,6 +29,10 @@ namespace OptimalOTS.LeanIsaBaseline
 set_option backward.isDefEq.respectTransparency false
 set_option backward.isDefEq.respectTransparency.types false
 
+/- The programs are only ever unfolded through their equation lemmas; keeping them irreducible
+stops the unifier from unrolling `chain … 255 …` or `tabulate` at a literal size. -/
+attribute [local irreducible] chain rootFold tabulate
+
 /-! ## Averaging over one coordinate (generic) -/
 
 private theorem sum_sum_update_pi {ι : Type} [Fintype ι] [DecidableEq ι] {R : ι → Type}
@@ -574,9 +578,14 @@ private theorem E_run_tabulate_chains (sk : Words) :
               (fun t => Record.endpoint (sk, y) (φ t.succ)) : Fin (n + 1) → Word),
             progUpd (sk, y) (ChainsOf fun t => φ t.succ)
               (progUpd (sk, y) (ChainSeg (φ 0) 0 255) (c y))) :=
-          ih (fun t => φ t.succ) hφ' (fun y => progUpd (sk, y) (ChainSeg (φ 0) 0 255) (c y))
-            (fun y p' => G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩) p'.1 :
-              Fin (n + 1) → Word), p'.2)) hfr' hc' hG'
+          by
+            have hih := ih (fun t => φ t.succ) hφ'
+              (fun y => progUpd (sk, y) (ChainSeg (φ 0) 0 255) (c y))
+              (fun y p' => G y ((Fin.cases (Record.word (sk, y) (φ 0) ⟨0 + 255, by omega⟩)
+                p'.1 : Fin (n + 1) → Word), p'.2)) hfr' hc' hG'
+            first
+              | simpa only using hih
+              | exact hih
       _ = ∑ y : Tbl, Nt * G y (fun t => Record.endpoint (sk, y) (φ t),
             progUpd (sk, y) (ChainsOf φ) (c y)) := by
           refine Finset.sum_congr rfl fun y _ => ?_
