@@ -95,24 +95,8 @@ theorem highCat_slice {c c' : ℕ → BitVec 256} :
 /-- The root input determines the retained 192-bit slice of every chain top. -/
 theorem rootCat_slice_inj {a b : Fin 32 → BitVec 256} (h : rootCat a = rootCat b) (k : Fin 32) :
     rootSlice k (a k) = rootSlice k (b k) := by
-  unfold rootCat at h
-  obtain ⟨hm, hlow⟩ := bv_append_inj (cast_injective _ h)
-  obtain ⟨hm, h7⟩ := bv_append_inj hm
-  obtain ⟨hhigh, h31⟩ := bv_append_inj hm
-  by_cases hk : k.val < 8
-  · simp only [rootSlice, hk, if_true]
-    by_cases hlast : k.val = 7
-    · obtain rfl : k = 7 := Fin.ext hlast
-      exact congrArg lo192 h7
-    · have key := lowCat_lo192 6 hlow k.val (by omega)
-      simpa [topFun, k.isLt] using key
-  · simp only [rootSlice, hk, if_false]
-    by_cases hlast : k.val = 31
-    · obtain rfl : k = 31 := Fin.ext hlast
-      exact congrArg (fun x : BitVec 256 => x.extractLsb' 64 192) h31
-    · have key := highCat_slice 22 hhigh (k.val - 8) (by omega)
-      have he : k.val - 8 + 8 = k.val := by omega
-      simpa [topFun, he, k.isLt] using key
+  show (a k).extractLsb' 64 192 = (b k).extractLsb' 64 192
+  rw [← rootCat_extract a k, ← rootCat_extract b k, h]
 
 /-! ## Names -/
 
@@ -215,7 +199,7 @@ theorem yv_hash_ch (hy : graph.ReconEqs d (fins A) given y) {k : Fin 32} {t : Fi
   exact ⟨w, hd, hw⟩
 
 theorem yv_hash_rh (hy : graph.ReconEqs d (fins A) given y) (he : Evaluated A rh) :
-    ∃ w : BitVec 256, d ⟨6272, yv y rc⟩ = some w ∧ yv y rh = w := by
+    ∃ w : BitVec 256, d ⟨7424, yv y rc⟩ = some w ∧ yv y rh = w := by
   obtain ⟨w, hd, hw⟩ := yv_hash hy (h := rh) (p := rc) rfl he
   exact ⟨w, hd, hw⟩
 
@@ -251,8 +235,8 @@ end Recon
 /-! ## The walk -/
 
 /-- The forged value at a node differs from the honest one on the bits the graph reads from it:
-all of them at a source, a chain input or the root input; the high 192 bits at a chain value below
-the top; the low 192 bits at a chain top. -/
+all of them at a source, a chain input or the root input; the state slice at a chain value below
+the top; the high 192 bits at a chain top. -/
 def Dif (ξ : Rec) : (v : Name) → BitVec v.len → Prop
   | cv k t, x => if t.val = 31 then rootSlice k x ≠ rootSlice k (val ξ (cv k t)) else
       trunc k x ≠ trunc k (val ξ (cv k t))
@@ -368,7 +352,7 @@ theorem events_none {A' : Finset Name} (hA' : IsCut A') {ξ : Rec} {d : Cache}
   obtain ⟨w, hd, -⟩ := yv_hash_rh hy hrE
   by_cases hne : yv y rc = val ξ rc
   · right
-    refine ⟨⟨6272, yv y rc⟩, ?_, by rw [hd]; rfl⟩
+    refine ⟨⟨7424, yv y rc⟩, ?_, by rw [hd]; rfl⟩
     rw [kc_isSome_iff]
     exact ⟨rh, rc, rfl, by rw [hne]; rfl⟩
   · left

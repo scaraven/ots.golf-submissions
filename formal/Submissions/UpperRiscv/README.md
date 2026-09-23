@@ -1,68 +1,91 @@
-# RISC-V upper bound: 371-cycle in-place edge chain
+# RISC-V upper bound: 362 cycles with in-place chains
 
 This candidate extends the 372-cycle dense-dispatch record (PR #27, by alexanderlhicks,
-itself building on dhsorens's paired-dispatch construction). It removes one redirect
-instruction from every accepted execution: **371 = 40 index + 309 chains + 22 root and
-decision**, on every accepting run and as the bound on every run.
+itself building on dhsorens's paired-dispatch construction). Index processing, dispatch,
+digits and security argument are those of the 372 record; what changes is where the chains
+are hashed. **362 = 40 index + 299 chains + 23 root and decision**, on every accepting run
+and as the proved bound on every run.
 
-## The in-place narrow edge chain
+## The idea: hash most chains inside the signature
 
-The scheme is a WOTS-style one-time signature: 32 hash chains, 8 with 192-bit states
-and 24 with 160-bit states, and one 4-bit digit per chain. Each chain is hashed in the
-signature buffer itself. A hash reads the state at `x10` and writes its 256-bit answer
-at `x12`; the next state is a slice of that answer, and the final answers of all chains
-form the root input `R`. In the 372 record every narrow chain first *expands* its
-160-bit wire value, which is packed at a 20-byte stride, into a 24-byte tile: the first
-hash reads the packed value and writes the tile, and an `ADDI x10, x12, 8` (the
-"redirect") points later hashes at the tile. That costs 24 redirects.
+The scheme is a WOTS-style one-time signature: 32 hash chains, 24 with 160-bit (20-byte)
+states and 8 with 192-bit (24-byte) states, one 4-bit digit per chain, accepted digit sum
+157. A chain hash reads the state at `x10` and writes a 256-bit (32-byte) answer to the
+8-byte aligned buffer at `x12`; the next state is a slice of the answer, and the final
+answers of all chains form the root input `R`, whose hash must match the public key.
 
-Here one narrow chain skips the expansion. Chain 12 (tile 27, the fine chain of pair 6)
-is re-packed to the top edge of the wire, bytes `[652, 672)` after the nonce, and hashed
-**in place**: `x10 = 652` and `x12 = 648` (8-byte aligned). Every hash of this chain
-writes the block `[648, 680)`, and the next state is answer bytes `[4, 24)`, which is
-again `[652, 672)`. This is safe because the block touches only
+In the 372 record every 20-byte narrow value sits at a 20-byte stride in the signature,
+where no 8-aligned 32-byte buffer can hold it in place, so each narrow chain first
+*expands* its value into a separate 24-byte tile and then needs a "redirect"
+(`ADDI x10, x12, 8`): 24 redirects in all.
 
-- `[648, 652)`, the tail of the wire value below it (tile 31, chain 8), which is
-  processed earlier and so already consumed; and
-- `[672, 680)`, just above the end of the 5504-bit signature. It holds only tile 28's
-  spill, which neither `R` nor any unread input needs. The 372 record overwrote the same
-  bytes when it expanded tile 27.
+Here the wire order of the signature interleaves narrow and wide values so that most chains
+are hashed **in place**, with no expansion and no redirect:
 
-The chain's final answer leaves bytes `[8, 32)` at `[656, 680)`, exactly where the record
-keeps tile 27's committed slice, so `R` and the root hash are unchanged. The chain needs
-no expansion hash and no redirect. Its ladder has 16 hashes like a wide chain and it
-still hashes `d + 1` times. The saving is one cycle.
+- An in-place chain with wire value at `w` uses the buffer `x12 = w - j` (8-aligned) and
+  its next state is answer bytes `[j, j + width)`, which is `w` again, so every hash
+  reads and overwrites the same bytes (`Forest.truncOff k = 8 j`). The buffer's other
+  `32 - width` bytes (`j` below, the rest above) must be *dead* when the chain runs:
+  already-read signature values of earlier chains, the consumed nonce tail, or free memory.
+- The repeating 64-byte unit of the signature is `gap (20) | narrow (j = 12) | wide
+  (j = 0)`: the "gap" holds the value of a chain that is expanded (and so read) earlier;
+  the in-place narrow chain extends 12 bytes down into it and the wide chain 8 bytes up
+  into the next unit's gap, so their extensions overwrite exactly the stale gap bytes.
+  11 narrow chains (13-23 in execution order; `j` is 12, 4, 0 or 8) and all 8 wide
+  chains (24-31) run in place.
+- The 13 other narrow chains (0-12) are expanded as before: 11 tiles are stacked above
+  the signature at a 24-byte stride and processed top-down, and two tiles sit *in span*
+  over the three-value gap `[472, 532)` of their own wire values (chain 11 runs first,
+  then chain 12's tile overwrites chain 11's already-read value).
+- The bottom wide chain (wire `[0, 24)`, `x12 = -8` relative to the end of the nonce)
+  runs **last**. Its buffer spills into the consumed nonce tail and its state ends at the
+  start of `R`, so after it `x10` already points at the root input: the root needs
+  no `ADDI x10` (one cycle).
 
-Two layout changes make room for it:
+Offsets are relative to `0x400040`, the first byte after the 16-byte nonce. `R` is
+`[0, 928)`: the 32-byte final answers of the 20 chains whose buffers lie inside it and the
+top 24 bytes of the other 12, contiguous and identical for every digit vector. It is 7424
+bits, 15 compressions (the record's `R` was 784 bytes, 13 compressions): two root
+blocks are the price of the in-place extensions.
 
-- **Wire re-pack.** Narrow tile `p` stores its wire value at block `p - 8` for
-  `p <= 26` (as before), block 23 for `p = 27`, and block `p - 9` for `p >= 28`.
-  In execution order, narrow chain `b` is at `Payload.wireBlock b`. No hash overwrites
-  a value that has not been read yet; `MixedLayout.unread_disjoint'` checks all 32 x 32
-  chain pairs.
-- **Group 4 swap.** Pair 6's copy body grows by one instruction, to between 26 and 41
-  instructions, so it no longer fits a 40-instruction slot. Row group 4 becomes
-  `[10, 14, 6]`: pair 6 takes the 48-instruction slot and pair 14 the middle slot.
-  Pair 14's JALR immediate is now +160 rather than +320.
+**Accounting (every accepted input):** index 40; chains 189 hashes + 64 pointer ADDIs +
+**13** redirects + 32 dispatch (LHU + JALR per pair) + 1 width change = 299; root
+`ADDI x11, x13, 1920` + 15-cycle ECALL = 16; decision 7. Total 40 + 299 + 23 = 362
+(record: 40 + 310 + 22 = 372: -11 redirects, -1 root ADDI, +2 root blocks). The image has
+12340 instructions and 104 data bytes (49464 bytes); the record's row groups
+`[0,1,2] [3] [8,4,12] [9,5,13] [10,6,14] [11,7,15]` are unchanged, the largest landing
+address is 53324.
 
-Accounting: 189 chain hashes, 64 pointer instructions, **23** redirects, 32 dispatch
-instructions and one width change give 309 cycles for the chains. The index phase (40)
-and root and decision (22) are unchanged. The image is still 12338 instructions and 104
-data bytes (49456 bytes).
+## What changed in the proof
 
-In the proof, `Payload` becomes a non-involutive permutation (`index`/`unindex`,
-`permute`/`unpermute`). `Forest.truncOff` gives each chain's state offset in its answer
-(64 bits, or 32 for chain 12), and `work k` is the chain's input address. A general
-counting lemma `Values.card_filter_extract_le` bounds the security events at either offset.
+- **Labelling.** DAG chain `k` is the `k`-th executed chain (narrow chains 0-23, then wide
+  chains 24-31) and pair `q` = chains `2q, 2q+1` still reads index lane `q`, so the index,
+  digit and dispatch proofs are untouched. The graph cost of the root is 15 (keygen 1039,
+  reconstruction 204, verification 205 compressions).
+- **Wire order.** `Payload` maps graph-order bits to wire bits through a permutation of
+  32-bit units (`unitMap`/`unitUnmap`, inverse laws by `decide +kernel`), since every value
+  is 5 or 6 units long.
+- **Per-chain tables** over `Fin 32`, all checked by `decide +kernel`: `outAddr` (buffer),
+  `wireSlot` (wire value), `expands`, `work` (input address), `truncOff`,
+  `work k = outAddr k + truncOff k / 8`, no hash clobbers an unread wire value
+  (`unread_disjoint'`) or an earlier chain's committed root slice (`completed_disjoint'`).
+- **Root.** `Forest.rootCat` is a table-driven concatenation of the kept answer slices in
+  memory order (`rootChain`, `rootStart`, `rootOff`). One generic lemma,
+  `Forest.rootCat_extract`, shows that `rootCat c` determines the high 192 bits of every
+  chain top; the security proof (`Events.rootCat_slice_inj`, `Values.card_updHash_rc_le`)
+  only uses that fact. The machine side assembles `R` piece by piece
+  (`MixedRootMemory.completed_part`) and `MixedRoot` drops the pointer update.
 
-**Validation status:** the claim has so far been checked **only by our private CI** (a
-GitHub Actions build of `Submissions.UpperRiscv.Solution` against the pinned contract,
-with an axiom check). The hosted ots.golf verifier has **not** checked it. Before any
-Lean was written, a Python emulator of this exact image (`record + in-place edge chain`)
-measured 371 = 40/309/22 on every accepted input and at most 371 on rejects. It also
-rejected every exhaustive single-bit flip of a valid signature.
+**Validation status:** checked by our private CI mirror of the verifier (a GitHub Actions
+build of `Submissions.UpperRiscv.Solution` against the pinned contract, the stub-statement
+and axiom check, and the pinned comparator); **not yet** by the hosted ots.golf verifier.
+Before any Lean was written, a Python emulator of this exact image measured 362 =
+40/299/23 on every accepted input (213 accepting runs, including forced extreme digit
+vectors) and at most 362 on every reject; a byte-tag replay found no clobbered unread
+input, one `R` map for all digit vectors, and at least 24 committed bytes per chain.
 
-Assisted by: Claude Opus 5.5 (Anthropic).
+The in-place layout was found with Claude Fable 5.1 and implemented in Lean with
+Claude Opus 5.5 (Anthropic).
 
 ---
 

@@ -58,11 +58,11 @@ def chainsCost (index : Idx) : ℕ :=
   (∑ k : Fin 32, (32-RiscvUpperForest.ForestVerifier.pos index k)) +
     2*32 + 2*16 + (∑ k : Fin 32, earlyHash k) + 1
 
-theorem chainsCost_eq (index : Idx) : chainsCost index = 309 := by
-  have he : ∑ k : Fin 32, earlyHash k = 23 := by decide +kernel
+theorem chainsCost_eq (index : Idx) : chainsCost index = 299 := by
+  have he : ∑ k : Fin 32, earlyHash k = 13 := by decide +kernel
   rw [chainsCost, all_chain_hashes, he]
 
-theorem totalCost (index : Idx) : 40+chainsCost index+22 = 371 := by
+theorem totalCost (index : Idx) : 40+chainsCost index+23 = 362 := by
   rw [chainsCost_eq]
 
 end OptimalOTS.RiscvMixedProgram

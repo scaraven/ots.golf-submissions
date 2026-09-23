@@ -1,53 +1,64 @@
-# In-place edge chain: 371-cycle candidate
+# In-place chains: 362-cycle candidate
 
 This extends the 372-cycle dense-dispatch record (PR #27 by alexanderlhicks, which builds
 on dhsorens's paired dispatch and the 377/393-cycle optimizations credited below). The
 notes of the 372 construction follow unchanged after this section.
 
-Assisted by: Claude Opus 5.5 (Anthropic)
+Assisted by: Claude Fable 5.1 (design search) and Claude Opus 5.5 (Lean implementation),
+Anthropic.
 
-## What changes (372 -> 371)
+## Byte layout (offsets from `0x400040`; `k` = execution order)
 
-- **Machine.** Chain 12 (tile 27) is hashed in place at the wire's top edge, `x10 = 652`,
-  `x12 = 648`. Its block `[648, 680)` covers the already-consumed tail of tile 31's wire
-  value and the 8 bytes above the signature, which hold only tile 28's dead spill. Its next state is answer bytes `[4, 24)`,
-  so `truncOff 12 = 32`. `prologue 6` loses its expansion ECALL and redirect, and pair
-  6's fine ladder has 16 ECALLs. Only the redirect is saved: 23 redirects instead of 24.
-- **Wire order.** Narrow tiles 8-26 keep blocks 0-18, tile 27 moves to block 23 and
-  tiles 28-31 move to blocks 19-22 (`Payload.wireBlock`, inverse `Payload.payloadBlock`).
-  The payload map is no longer an involution, so the adapter encodes with `unpermute` and
-  decodes with `permute`.
-- **Packing.** Group 4 is `[10, 14, 6]`: pair 6 (26-41 instructions) takes the
-  48-instruction slot, pair 14 (25-40) the middle one, `jumpImm 14 = 160`. Every other
-  row, capacity and base constant is unchanged apart from pair 6's base lane. The image
-  still has 12338 instructions and 104 data bytes.
-- **Root.** Unchanged. Tile 27's retained answer bytes `[8, 32)` land at `[656, 680)`
-  exactly as before, so `R`, `rootCat` and the 13-block root hash are untouched.
-- **Accounting.** 40 + (189 + 64 + 23 + 32 + 1 = 309) + 22 = 371.
+```
+ k   type    mode   wire        x12   j   note
+ 0-9 narrow  EXP    gaps        896..680 (24-byte stack, top-down)   retain answer[8,32)
+ 10  narrow  EXP    [652,672)   656   -   stack base, retains all 32 bytes
+ 11  narrow  EXP    [492,512)   496   -   in-span tile, retains answer[8,32)
+ 12  narrow  EXP    [472,492)   472   -   in-span tile, overwrites chain 11's read value
+ 13-19 narrow IP    68+64m      56+64m 12  unit `gap | N(j=12) | W(j=0)`
+ 20  narrow  IP     [532,552)   528   4
+ 21  narrow  IP     [572,592)   560   12
+ 22  narrow  IP     [592,612)   592   0
+ 23  narrow  IP     [632,652)   624   8
+ 24-30 wide  IP     24+64m      24+64m 0   spill 8 bytes up into the next gap
+ 31  wide    IP     [0,24)      -8    8   last chain; spill into the consumed nonce tail
+```
+
+`R = [0, 928)`: chains 31, 24, 13, 25, 14, ..., 30, 19, 12, 11, 20-23, 10, 9, ..., 0 in
+memory order (`Forest.rootChain`); chains 0-9, 11 and 31 keep answer bytes `[8, 32)`,
+the others all 32 bytes (`Forest.rootStart`).
+
+## Accounting
+
+- Index 40 (unchanged; its final instruction now sets `x11 = 160` because the narrow
+  chains run first, and `prologue 12` switches to 192).
+- Chains: 189 hashes + 64 pointer ADDIs + 13 redirects + 32 dispatch + 1 width change = 299.
+- Root `ADDI x11, x13, 1920` (7424 bits) + 15-cycle ECALL + decision 7 = 23.
+- 362 on every accepted input; the proof bounds every run by 362.
 
 ## Proof changes
 
-- `Payload`: `wireBlock`/`payloadBlock` with inverse laws checked by `decide +kernel`
-  over `Fin 24`; `index`/`unindex` and `permute`/`unpermute` are mutually inverse.
-- `Names.truncOff` and `trunc` at `min (truncOff k) (w - chainBits k)`. `Values` adds
-  `card_filter_extract_le`, which bounds 256-bit words with a fixed `c`-bit window at
-  any offset. `card_filter_trunc_le'` and `card_filter_rootSlice_le` now go through it.
-  No other security file reads the offset.
-- `MixedProgram`: `expands`, `work`, the new `wireSlot`, `withinGroup` and
-  `groupPairs`. The machine invariants (`HashInv`, `HoldsAt`, `Prepared`, dispatch,
-  landing) are stated at `work k`. `MixedLayout.work_eq'` (`work k = outAddr k +
-  truncOff k / 8`) and `unread_disjoint'` are kernel checks over all chains.
-- `MixedCost`/`MixedPair`/`MixedPhase`: 23 early hashes, per-pair overhead 120, chains 309.
+- `Payload`: 32-bit-unit permutation tables with kernel-checked inverse laws.
+- `Names`: `chainBits` (narrow first), `truncOff` (0/32/64/96), root input `rootCat` as a
+  recursive concatenation `rootPart` over the memory-order table, and the generic
+  `rootCat_extract`; root cost 15, keygen cost 1039.
+- `Values`/`Events`: `rootSlice` is uniformly the high 192 bits; `rootCat_slice_inj` and
+  `card_updHash_rc_le` follow from `rootCat_extract`. Constants 7424/204/205/1039.
+- `MixedProgram`/`MixedLayout`/`MixedMemory`: table-driven `outAddr`, `wireSlot`,
+  `slot = outAddr + 8`, `work`; every per-chain fact is `decide +kernel` over `Fin 32`.
+- `MixedRootMemory` assembles `R` by induction over `rootPart`; `MixedRoot` has no pointer
+  update and hashes 15 blocks; `MixedIndexPhase`/`MixedPair`/`MixedLanding` move the
+  width change to pair 12.
 
 ## Validation status
 
-Checked **only by our private CI**: a GitHub Actions build of
-`Submissions.UpperRiscv.Solution` against the pinned `.contract`, with policy and axiom
-checks. It has **not** been checked by the hosted ots.golf verifier. The Python emulator
-of this image (`.work/imb/sim/inplace_variants.py --variant N1` in our working tree, not
-part of this root) measured 371 = 40/309/22 on every accepted input and at most 371 on
-rejects. It rejected all exhaustive single-bit flips, and replaying byte tags found no
-clobbered unread input.
+Checked by our private CI mirror of the verifier (build of
+`Submissions.UpperRiscv.Solution` against the pinned `.contract`, policy check,
+stub-statement and axiom check, pinned comparator); **not** yet by the hosted ots.golf
+verifier. A Python emulator of this exact image (`.work/imb/sim/e361.py` with the last
+chain hashed `d + 1` times, in our working tree, not part of this root) measured 362 =
+40/299/23 on every accepted input and at most 362 on rejects, with byte-tag replay
+checks of every hash input and of `R`.
 
 ---
 

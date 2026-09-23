@@ -1,12 +1,16 @@
 import Submissions.UpperRiscv.Program
 import Submissions.UpperRiscv.Payload
 
-/-! The 371-cycle mixed-width candidate image. This module proves image validity;
+/-! The 362-cycle in-place candidate image. This module proves image validity;
 the complete execution/refinement certificate is a separate obligation.
 
-Narrow chain 12 (physical tile 27) is hashed in place at the top edge of the wire: it does not
-expand its packed value, so its entry has no early hash and no redirect, and while it hashes
-`x10` points at its wire value (`work 12 = wireSlot 12`). -/
+Chains are numbered in execution order. Chains 0–12 are narrow chains whose first hash
+*expands* the 20-byte wire value into a separate 32-byte output block, followed by the redirect
+`ADDI x10, x12, 8`. Chains 13–23 (narrow) and 24–31 (wide) are hashed *in place*: every hash
+reads the state at its wire address (`work k = wireSlot k`) and writes its answer to an 8-byte
+aligned block `outAddr k` that contains it, `j = wireSlot k - outAddr k` bytes below it. The last
+chain's block starts at `0x400038`, eight bytes below the root input, so after it `x10` already
+points at the root input. -/
 
 set_option maxRecDepth 100000
 
@@ -16,26 +20,29 @@ open RiscvZkvm.Rv64
 open Riscv2Program (Code imm12 reject indexPrefix lengthCheck wordReg baseReg
   laneWordAddr hashBase laneBase wordBytes broadcast nop decision)
 
-def physical (k : ℕ) : ℕ := if k < 8 then k else 39 - k
-def narrow (k : ℕ) : Bool := decide (8 ≤ k)
+def narrow (k : ℕ) : Bool := decide (k < 24)
 /-- The chain's first hash expands a packed narrow value and is followed by the redirect. -/
-def expands (k : ℕ) : Bool := decide (8 ≤ k ∧ k ≠ 12)
-def slot (k : ℕ) : ℕ := 0x400040 + 24 * physical k + if narrow k then 8 else 0
-def wireSlot (k : ℕ) : ℕ :=
-  if narrow k then 0x400100 + 20 * Payload.wireBlock (k - 8) else slot k
+def expands (k : ℕ) : Bool := decide (k ≤ 12)
+/-- Offset of chain `k`'s 32-byte output block (`x12`) from `0x400038`. -/
+def outOffset (k : ℕ) : ℕ :=
+  [904, 880, 856, 832, 808, 784, 760, 736, 712, 688, 664, 504, 480, 64, 128, 192,
+    256, 320, 384, 448, 536, 568, 600, 632, 32, 96, 160, 224, 288, 352, 416, 0].getD k 0
+def outAddr (k : ℕ) : ℕ := 0x400038 + outOffset k
+/-- The disclosed value of chain `k` in the signature. -/
+def wireSlot (k : ℕ) : ℕ := 0x400040 + 4 * Payload.wireUnit k
+/-- The state of an expanding chain after the redirect. -/
+def slot (k : ℕ) : ℕ := outAddr k + 8
 /-- The input address while the chain hashes. -/
 def work (k : ℕ) : ℕ := if expands k then slot k else wireSlot k
-def outAddr (k : ℕ) : ℕ := slot k - 8
 def fineWidth (_q : ℕ) : ℕ := 4
 def copies (_q : ℕ) : ℕ := 16
 def group (q : ℕ) : ℕ := if q < 3 then 0 else if q = 3 then 1 else
   if q < 8 then q-2 else if q < 12 then q-6 else q-10
 def withinGroup (q : ℕ) : ℕ := if q < 3 then q else if q = 3 then 0 else
-  if q = 6 then 2 else if q = 14 then 1 else
   if q < 8 then 1 else if q < 12 then 0 else 2
 def copyCapacity (q : ℕ) : ℕ := if q = 3 then 128 else if withinGroup q = 2 then 48 else 40
 def groupOffset (g : ℕ) : ℕ := 2048*g
-def copiesStart : ℕ := 4096 + 4 * 50
+def copiesStart : ℕ := 4096 + 4 * 52
 def copyStart (q d : ℕ) : ℕ :=
   copiesStart + 4 * (groupOffset (group q) + 128 * (copies q - 1 - d) + 40 * withinGroup q)
 def landing0 (q : ℕ) : ℕ := copyStart q 0 + 4 * (2 ^ fineWidth q - 1)
@@ -56,21 +63,23 @@ def laneWord (g : ℕ) : Code :=
 def fold : Code :=
   [.SRLI .x26 .x27 7, .ADD .x27 .x27 .x26, .AND .x27 .x27 .x1]
 def sumCheck : Code := [.REMU .x27 .x27 .x2, .XORI .x27 .x27 628, .BEQ .x27 .x0 16] ++ reject
+/-- The narrow chains run first. -/
+def chainSetup : Code := [.ADDI .x11 .x0 160]
 def indexPhase : Code :=
   indexPrefix ++ [.ECALL] ++ lengthCheck ++ loadWords ++
-    (List.range 4).flatMap laneWord ++ fold ++ sumCheck ++ [.ADDI .x11 .x0 192]
+    (List.range 4).flatMap laneWord ++ fold ++ sumCheck ++ chainSetup
 
 def enter (k previous : ℕ) : Code :=
   [.ADDI .x10 .x10 (imm12 ((wireSlot k : ℤ) - previous)),
    .ADDI .x12 .x10 (imm12 ((outAddr k : ℤ) - wireSlot k))] ++
     if expands k then [.ECALL, .ADDI .x10 .x12 8] else []
 def prologue (q : ℕ) : Code :=
-  (if q = 4 then [.ADDI .x11 .x0 160] else []) ++
+  (if q = 12 then [.ADDI .x11 .x0 192] else []) ++
     enter (2*q) (if q = 0 then hashBase else work (2*q-1)) ++
     [.LHU .x28 .x12 (imm12 ((laneBase + 2*q : ℤ) - outAddr (2*q))),
      .JALR .x0 .x28 (imm12 (jumpImm q))]
-def root : Code :=
-  [.ADDI .x10 .x10 (imm12 ((0x400038 : ℤ) - slot 31)), .ADDI .x11 .x13 768, .ECALL]
+/-- `x10` already points at the root input after the last chain. -/
+def root : Code := [.ADDI .x11 .x13 1920, .ECALL]
 def copyBody (q d : ℕ) : Code :=
   List.replicate (2 ^ fineWidth q - if expands (2*q) then 1 else 0) .ECALL ++
     enter (2*q+1) (work (2*q)) ++
@@ -79,7 +88,7 @@ def copyBody (q d : ℕ) : Code :=
 def copyCode (q d : ℕ) : Code :=
   copyBody q d ++ List.replicate (copyCapacity q - (copyBody q d).length) nop
 def groupPairs (g : ℕ) : List ℕ :=
-  if g = 0 then [0,1,2] else if g = 1 then [3] else if g = 4 then [10,14,6] else [g+6,g+2,g+10]
+  if g = 0 then [0,1,2] else if g = 1 then [3] else [g+6,g+2,g+10]
 def groupCode (g : ℕ) : Code :=
   (List.range 16).flatMap fun c =>
     (groupPairs g).flatMap fun q => copyCode q (copies q - 1 - c)
@@ -93,7 +102,7 @@ def dataImage : List (BitVec 8) :=
 def image : Riscv.Image := ⟨verifier, dataImage⟩
 
 theorem index_length : indexPhase.length = 46 := by decide +kernel
-theorem code_length : verifier.length = 12338 := by decide +kernel
+theorem code_length : verifier.length = 12340 := by decide +kernel
 theorem data_length : dataImage.length = 104 := by decide +kernel
 theorem admitted : verifier.all Riscv.admittedInstruction = true := by decide +kernel
 theorem image_valid : image.Valid := by
